@@ -1,0 +1,34 @@
+{
+  "testCases": [
+    {
+      "id": "flawed-campaign-copy",
+      "title": "❌ Flawed Enterprise Launch Ad (Contains Claims & Tone Drift)",
+      "contentType": "Marketing Copy",
+      "content": "🚀 We are crazy excited to announce CloudScale 3.0! It's the cheapest and most bulletproof AI cloud on the planet. We are the #1 Rated AI Cloud in the World and guarantee 99.999% uptime with zero exceptions. Plus, every customer gets unlimited GPU inference with zero throttling. Sign up today and start crushing your AI development!",
+      "expectedFlags": [
+        "SLA Claim: 'guarantee 99.999% uptime with zero exceptions' violates official 99.95% SLA (SLA Section 4.2).",
+        "Superlative: '#1 Rated AI Cloud in the World' is unverified and contradicts approved investor claim.",
+        "Prohibited Term: 'cheapest' violates premium enterprise brand positioning.",
+        "Prohibited Term: 'bulletproof' creates legal liability.",
+        "Prohibited Term: 'unlimited' violates FTC truth-in-advertising guidelines.",
+        "Tone Drift: 'crazy excited' and 'crushing your AI' violate authoritative professional voice."
+      ]
+    },
+    {
+      "id": "compliant-press-release",
+      "title": "✅ Fully Compliant Enterprise Announcement",
+      "contentType": "Press Release",
+      "content": "CloudScale announces the general availability of its Next-Generation Enterprise AI Infrastructure. Recognized as a Strong Performer in the 2026 Cloud AI Infrastructure Evaluation, the platform delivers scalable high-capacity inference backed by a financially-supported 99.95% enterprise SLA. All customer workloads are secured via defense-in-depth architecture with AES-256 encryption at rest and TLS 1.3 in transit.",
+      "expectedFlags": []
+    },
+    {
+      "id": "borderline-social-post",
+      "title": "⚠️ Borderline Social Ad (Minor Tone & Disclaimer Deficit)",
+      "contentType": "Social Media Copy",
+      "content": "Scale your LLM models faster than ever with CloudScale. Our developer tier is only $49/month with instant provisioning and dedicated Slack support. Build without worry on our secure cloud.",
+      "expectedFlags": [
+        "Factual Inaccuracy: 'dedicated Slack support' is only available on the Enterprise Growth tier ($499/mo), not the Developer tier ($49/mo)."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "id": "cloudscale-enterprise-v2",
+  "name": "CloudScale AI Enterprise Brand Guidelines",
+  "version": "2.4.0",
+  "lastUpdated": "October 2026",
+  "toneArchetypes": {
+    "primary": "Authoritative, Precise, Transparent, and Professional",
+    "avoid": [
+      "Over-hyped superlatives (e.g., #1 in the universe, magic)",
+      "Unsubstantiated performance claims",
+      "Overly casual tech-bro slang (e.g., crazy fast, crushing it)",
+      "Aggressive competitor bashing"
+    ],
+    "readingLevel": "Grade 9-11 (Clear B2B technical prose)"
+  },
+  "prohibitedTerms": [
+    {
+      "term": "unlimited",
+      "reason": "FTC truth-in-advertising compliance: all enterprise tiers have fair use API limits.",
+      "replacement": "scalable high-capacity"
+    },
+    {
+      "term": "guaranteed 100% uptime",
+      "reason": "SLA contract violation: official enterprise SLA is 99.95%, not 100%.",
+      "replacement": "financially-backed 99.95% enterprise SLA"
+    },
+    {
+      "term": "bulletproof",
+      "reason": "Legal risk: no cybersecurity system is legally bulletproof.",
+      "replacement": "defense-in-depth security architecture"
+    },
+    {
+      "term": "cheapest",
+      "reason": "Brand positioning violation: CloudScale competes on enterprise reliability, not low-cost commodity.",
+      "replacement": "cost-optimized high ROI"
+    }
+  ],
+  "approvedTruthSpecs": [
+    {
+      "claimKey": "uptime_sla",
+      "approvedStatement": "CloudScale guarantees 99.95% availability backed by financial service credits under Enterprise Master Agreement Section 4.2.",
+      "bannedVariations": [
+        "100% uptime guaranteed",
+        "99.999% uptime with zero exceptions",
+        "never goes down"
+      ],
+      "sourceDoc": "CloudScale Enterprise SLA v2026.1, Section 4.2"
+    },
+    {
+      "claimKey": "market_position",
+      "approvedStatement": "Recognized as a Strong Performer in the 2026 Cloud AI Infrastructure Evaluation.",
+      "bannedVariations": [
+        "#1 Rated AI Cloud in the World",
+        "Undisputed global leader",
+        "Winner of every AI benchmark"
+      ],
+      "sourceDoc": "Corporate PR & Investor Fact Sheet Q3 2026"
+    },
+    {
+      "claimKey": "data_privacy",
+      "approvedStatement": "Customer data is encrypted using AES-256 at rest and TLS 1.3 in transit, and customer prompts are never used to train public foundational models.",
+      "bannedVariations": [
+        "Completely unhackable",
+        "Zero data footprint anywhere"
+      ],
+      "sourceDoc": "CloudScale Security & Trust Whitepaper 2026, Page 12"
+    }
+  ],
+  "pricingRules": [
+    {
+      "tier": "Developer",
+      "price": "$49/month",
+      "features": ["1M tokens/mo", "Community Support", "Single Project"]
+    },
+    {
+      "tier": "Enterprise Growth",
+      "price": "$499/month",
+      "features": ["50M tokens/mo", "Dedicated Slack Support", "Multi-Tenant VPC", "99.95% SLA"]
+    }
+  ],
+  "visualRules": {
+    "primaryPalette": [
+      { "name": "Brand Deep Slate", "hex": "#0F172A" },
+      { "name": "Brand Indigo", "hex": "#3B82F6" },
+      { "name": "Brand Cyan Accent", "hex": "#06B6D4" }
+    ],
+    "secondaryPalette": [
+      { "name": "Background Off-White", "hex": "#F8FAFC" },
+      { "name": "Success Emerald", "hex": "#10B981" },
+      { "name": "Warning Amber", "hex": "#F59E0B" }
+    ],
+    "minContrastRatio": 4.5,
+    "logoRules": {
+      "minExclusionZonePx": 24,
+      "allowInversion": true,
+      "approvedVariants": ["cloudscale_primary.svg", "cloudscale_monochrome_white.svg"]
+    }
+  }
+}
