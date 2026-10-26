@@ -29,6 +29,13 @@ import {
   XCircle,
   MousePointerClick,
   CheckCheck,
+  Printer,
+  Download,
+  Compass,
+  Plus,
+  Trash2,
+  ShieldAlert,
+  FileCode,
 } from 'lucide-react';
 import defaultGuidelines from '@/data/defaultBrandGuidelines.json';
 import channelTemplates from '@/data/channelTemplates.json';
@@ -203,6 +210,7 @@ export default function AegisBrandApp() {
   const [contrastColor1, setContrastColor1] = useState<string>('#FFFFFF');
   const [contrastColor2, setContrastColor2] = useState<string>('#0F172A');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showJudgeTour, setShowJudgeTour] = useState<boolean>(true);
 
   // Run inspection on initial mount
   useEffect(() => {
@@ -320,6 +328,17 @@ export default function AegisBrandApp() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  function handleDownloadCertificateJson(cert: ComplianceCertificate) {
+    const jsonStr = JSON.stringify(cert, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AegisBrand-Compliance-Certificate-${cert.certificateId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const currentContrast = calculateWcagContrast(contrastColor1, contrastColor2);
   const wcagAAMet = currentContrast >= 4.5;
 
@@ -379,6 +398,22 @@ export default function AegisBrandApp() {
                   : '⚙️ Deterministic Engine'}
               </span>
             </button>
+
+            {/* 60s TOUR BUTTON */}
+            {!showJudgeTour && (
+              <button
+                onClick={() => setShowJudgeTour(true)}
+                className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-1 transition ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                    : 'bg-slate-100 border-slate-300 text-blue-600 hover:bg-slate-200'
+                }`}
+                title="Open 60-Second Guided Tour"
+              >
+                <Compass className="h-4 w-4" />
+                <span className="hidden md:inline">Tour</span>
+              </button>
+            )}
 
             {/* LIGHT / DARK THEME TOGGLE */}
             <button
@@ -504,6 +539,120 @@ export default function AegisBrandApp() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+        {/* 60-SECOND JUDGE GUIDED TOUR BANNER */}
+        {showJudgeTour && (
+          <div className={`border rounded-xl p-4 relative shadow-sm transition ${
+            isDark
+              ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/40 to-slate-900 border-blue-500/40'
+              : 'bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white border-blue-200'
+          }`}>
+            <button
+              onClick={() => setShowJudgeTour(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-200 text-xs px-2 py-0.5 rounded border border-transparent hover:border-slate-700"
+              title="Dismiss Guide"
+            >
+              ✕ Hide Tour
+            </button>
+
+            <div className="flex items-center gap-2 mb-1.5">
+              <Compass className="h-4 w-4 text-blue-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                Codex 48 Judge Evaluation: 60-Second Guided Tour
+              </span>
+            </div>
+
+            <p className={`text-xs mb-3 ${textMuted}`}>
+              Experience the complete pre-publication brand governance flow in 4 rapid steps:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              {/* STEP 1 */}
+              <div
+                onClick={() => {
+                  setActiveTab('studio');
+                  handleChannelChange('Paid Digital Ad', 'flawed');
+                }}
+                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-blue-500 ${
+                  activeTab === 'studio' && content === channelTemplates.channels['Paid Digital Ad'].flawed
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : innerClass
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1 font-semibold text-blue-400 text-[11px]">
+                  <span>Step 1: Ingest Content</span>
+                  <span className="text-[10px] font-mono">0:00</span>
+                </div>
+                <p className={`text-[11px] leading-tight ${textMuted}`}>
+                  Loads flawed ad with banned terms &amp; SLA violations.
+                </p>
+              </div>
+
+              {/* STEP 2 */}
+              <div
+                onClick={() => {
+                  setActiveTab('studio');
+                  handleRunInspection();
+                }}
+                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-blue-500 ${
+                  isInspecting ? 'border-amber-500 bg-amber-500/10' : innerClass
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1 font-semibold text-amber-400 text-[11px]">
+                  <span>Step 2: Inspect Issues</span>
+                  <span className="text-[10px] font-mono">0:15</span>
+                </div>
+                <p className={`text-[11px] leading-tight ${textMuted}`}>
+                  Triggers Gemini AI + contrast checker to explain issues.
+                </p>
+              </div>
+
+              {/* STEP 3 */}
+              <div
+                onClick={() => {
+                  setActiveTab('studio');
+                  if (report && report.issues && report.issues.length > 0) {
+                    let updated = content;
+                    report.issues.forEach((iss) => {
+                      if (iss.suggestions?.[0]?.text) {
+                        updated = updated.replace(iss.flaggedExcerpt, iss.suggestions[0].text);
+                      }
+                    });
+                    setContent(updated);
+                  }
+                  handleApproveAndCertify();
+                }}
+                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-emerald-500 ${
+                  certificate ? 'border-emerald-500 bg-emerald-500/10' : innerClass
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1 font-semibold text-emerald-400 text-[11px]">
+                  <span>Step 3: Certify</span>
+                  <span className="text-[10px] font-mono">0:30</span>
+                </div>
+                <p className={`text-[11px] leading-tight ${textMuted}`}>
+                  Applies compliant edits &amp; issues SHA-256 certificate.
+                </p>
+              </div>
+
+              {/* STEP 4 */}
+              <div
+                onClick={() => setActiveTab('live')}
+                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-purple-500 ${
+                  activeTab === 'live' ? 'border-purple-500 bg-purple-500/10' : innerClass
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1 font-semibold text-purple-400 text-[11px]">
+                  <span>Step 4: Live Linter</span>
+                  <span className="text-[10px] font-mono">0:45</span>
+                </div>
+                <p className={`text-[11px] leading-tight ${textMuted}`}>
+                  Type live into the simulated canvas with real-time tags.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 1: PRE-FLIGHT STUDIO (THE CORE WORKFLOW) */}
         {activeTab === 'studio' && (
           <div className="space-y-6">
@@ -947,6 +1096,16 @@ export default function AegisBrandApp() {
                                   {copiedId === 'sig' ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                                 </button>
                               </div>
+                            </div>
+                            <div className="col-span-2 pt-1 flex items-center justify-end">
+                              <button
+                                onClick={() => handleDownloadCertificateJson(certificate)}
+                                className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1.5 transition ${
+                                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                                }`}
+                              >
+                                <Download className="h-3 w-3 text-emerald-500" /> Download Certificate JSON
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1421,6 +1580,7 @@ export default function AegisBrandApp() {
                       <th className="py-2.5 px-3">Approved By</th>
                       <th className="py-2.5 px-3">Verified At</th>
                       <th className="py-2.5 px-3">SHA-256 Signature</th>
+                      <th className="py-2.5 px-3 text-right">Receipt</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y font-mono text-[11px] ${borderSubtle}`}>
@@ -1431,6 +1591,15 @@ export default function AegisBrandApp() {
                         <td className="py-2 px-3 text-slate-500">{cert.approvedBy}</td>
                         <td className="py-2 px-3 text-slate-400">{new Date(cert.verifiedAt).toLocaleTimeString()}</td>
                         <td className="py-2 px-3 text-slate-500 text-[10px]">{cert.signatureSha256.substring(0, 16)}...</td>
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            onClick={() => handleDownloadCertificateJson(cert)}
+                            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 font-sans"
+                            title="Download Certificate JSON"
+                          >
+                            <Download className="h-3 w-3" /> JSON
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
