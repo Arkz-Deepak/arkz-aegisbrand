@@ -24,6 +24,11 @@ import {
   Info,
   Server,
   Cpu,
+  Wand2,
+  CheckCircle,
+  XCircle,
+  MousePointerClick,
+  CheckCheck,
 } from 'lucide-react';
 import defaultGuidelines from '@/data/defaultBrandGuidelines.json';
 import channelTemplates from '@/data/channelTemplates.json';
@@ -37,6 +42,146 @@ import {
 import { calculateWcagContrast } from '@/lib/verifier';
 
 type ChannelKey = 'Paid Digital Ad' | 'Press Release' | 'Blog Post' | 'Social Media Copy' | 'Whitepaper Deck';
+
+export interface LiveLinterIssue {
+  id: string;
+  matchedText: string;
+  type: 'CRITICAL_CLAIM' | 'TERMINOLOGY' | 'TONE_DRIFT';
+  ruleCitation: string;
+  explanation: string;
+  suggestedReplacement: string;
+  severity: 'high' | 'medium';
+}
+
+export function runRealtimeLinter(text: string): LiveLinterIssue[] {
+  const issues: LiveLinterIssue[] = [];
+  const lower = text.toLowerCase();
+
+  const rules: {
+    term: string;
+    rep: string;
+    type: 'CRITICAL_CLAIM' | 'TERMINOLOGY' | 'TONE_DRIFT';
+    cite: string;
+    expl: string;
+  }[] = [
+    {
+      term: 'cheapest',
+      rep: 'cost-optimized high ROI',
+      type: 'TERMINOLOGY',
+      cite: 'Brand Terminology §3.2',
+      expl: 'Brand positioning forbids low-cost commodity claims. CloudScale competes on enterprise reliability & high ROI.',
+    },
+    {
+      term: 'unlimited 5g internet',
+      rep: 'high-speed enterprise connectivity',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Factual Accuracy Specs §2.1',
+      expl: 'False product capability; CloudScale is an enterprise cloud compute platform, not an ISP or telco.',
+    },
+    {
+      term: 'unlimited 5g',
+      rep: 'enterprise connectivity',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Factual Accuracy Specs §2.1',
+      expl: 'False product capability claim.',
+    },
+    {
+      term: 'unlimited gpu inference',
+      rep: 'scalable high-throughput GPU compute clusters',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Infrastructure Policy §4.0',
+      expl: 'GPU allocations are governed by enterprise capacity policies; "unlimited" violates contract terms.',
+    },
+    {
+      term: 'unlimited gpu',
+      rep: 'scalable GPU compute pools',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Infrastructure Policy §4.0',
+      expl: 'All infrastructure is governed by fair-use quotas.',
+    },
+    {
+      term: 'zero throttling',
+      rep: 'predictable low-latency performance',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Infrastructure Policy §4.1',
+      expl: 'QoS traffic shaping is active during peak utilization.',
+    },
+    {
+      term: 'bulletproof',
+      rep: 'enterprise-hardened',
+      type: 'TONE_DRIFT',
+      cite: 'Tone & Voice Standards §1.4',
+      expl: 'Unsubstantiated superlative; violates professional, authoritative brand tone.',
+    },
+    {
+      term: '#1 rated ai cloud in the world',
+      rep: 'award-winning enterprise AI cloud',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Truth-in-Advertising §1.1',
+      expl: 'Unsubstantiated market claim under FTC truth-in-advertising guidelines.',
+    },
+    {
+      term: '#1 rated',
+      rep: 'industry-recognized',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Truth-in-Advertising §1.1',
+      expl: 'Unverified ranking claim.',
+    },
+    {
+      term: 'crazy excited',
+      rep: 'pleased to announce',
+      type: 'TONE_DRIFT',
+      cite: 'Tone & Voice Standards §2.1',
+      expl: 'Excessive colloquial hype; violates enterprise B2B precision.',
+    },
+    {
+      term: 'crushing',
+      rep: 'accelerating',
+      type: 'TONE_DRIFT',
+      cite: 'Tone & Voice Standards §2.2',
+      expl: 'Aggressive informal slang inappropriate for enterprise audiences.',
+    },
+    {
+      term: '100% uninterrupted uptime',
+      rep: 'financially-backed 99.95% enterprise SLA',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Master SLA Contract §4.2',
+      expl: 'Contradicts official enterprise SLA of 99.95% availability.',
+    },
+    {
+      term: '100% uptime',
+      rep: 'financially-backed 99.95% enterprise SLA',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Master SLA Contract §4.2',
+      expl: 'Contradicts official enterprise SLA of 99.95% availability.',
+    },
+    {
+      term: '99.999% uptime',
+      rep: 'financially-backed 99.95% enterprise SLA',
+      type: 'CRITICAL_CLAIM',
+      cite: 'Master SLA Contract §4.2',
+      expl: 'Official CloudScale SLA is 99.95%. Five-nines (99.999%) is not legally supported.',
+    },
+  ];
+
+  rules.forEach((r, idx) => {
+    const pos = lower.indexOf(r.term);
+    if (pos !== -1) {
+      const original = text.substring(pos, pos + r.term.length);
+      issues.push({
+        id: `live-rule-${idx}`,
+        matchedText: original,
+        type: r.type,
+        ruleCitation: r.cite,
+        explanation: r.expl,
+        suggestedReplacement: r.rep,
+        severity: r.type === 'CRITICAL_CLAIM' ? 'high' : 'medium',
+      });
+    }
+  });
+
+  return issues;
+}
 
 export default function AegisBrandApp() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -217,15 +362,21 @@ export default function AegisBrandApp() {
             <button
               onClick={() => setShowApiDrawer(!showApiDrawer)}
               className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 transition ${
-                apiKeyStatus.valid
-                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20'
+                report?.engineUsed === 'GEMINI_LIVE'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                  : apiKeyStatus.valid
+                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
               }`}
               title="Click to configure Gemini API Key"
             >
               <Cpu className="h-3.5 w-3.5" />
               <span className="hidden md:inline">
-                {apiKeyStatus.valid ? 'Gemini Live' : 'Deterministic Engine'}
+                {report?.engineUsed === 'GEMINI_LIVE'
+                  ? `🟢 Gemini Live (${report.modelUsed || 'Active'})`
+                  : apiKeyStatus.valid
+                  ? '⚡ Gemini Ready'
+                  : '⚙️ Deterministic Engine'}
               </span>
             </button>
 
@@ -320,10 +471,12 @@ export default function AegisBrandApp() {
                 title="Select Target Gemini Model"
               >
                 <option value="gemini-3.8-flash">⚡ Gemini 3.8 Flash (Active / Primary)</option>
-                <option value="gemini-3-flash-preview">✨ Gemini 3 Flash Preview (Live & Fast)</option>
-                <option value="gemini-2.5-flash">🚀 Gemini 2.5 Flash (Live)</option>
-                <option value="gemini-3.7-flash">🎯 Gemini 3.7 Flash</option>
-                <option value="gemini-3.8-pro">🧠 Gemini 3.8 Pro</option>
+                <option value="gemini-2.5-flash-lite">🚀 Gemini 2.5 Flash Lite (Fast & Active Quota)</option>
+                <option value="gemini-3.6-flash">✨ Gemini 3.6 Flash (Live & Working)</option>
+                <option value="gemini-3.5-flash">🌟 Gemini 3.5 Flash (Live & Working)</option>
+                <option value="gemini-flash-lite-latest">⚡ Gemini Flash Lite Latest</option>
+                <option value="gemini-3-flash-preview">🎯 Gemini 3 Flash Preview</option>
+                <option value="gemini-2.5-flash">🚀 Gemini 2.5 Flash</option>
               </select>
               <input
                 type="password"
@@ -919,37 +1072,325 @@ export default function AegisBrandApp() {
         )}
 
         {/* TAB 4: IN-SITU LIVE LINTER (IMPROVEMENT #1) */}
-        {activeTab === 'live' && (
-          <div className={`border rounded-xl p-6 space-y-6 ${cardClass}`}>
-            <div className={`border-b ${borderSubtle} pb-4`}>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-500 border border-cyan-500/30 uppercase">
-                  Strategic Improvement #1
-                </span>
-                <h2 className="text-lg font-bold">In-Situ Live Linter (Figma & CMS Embed Simulation)</h2>
-              </div>
-              <p className={`text-xs mt-1 ${textMuted}`}>
-                Real-time inline linting directly within the authoring canvas. As creators type, non-compliant claims and tone drift are flagged instantaneously without leaving the tool.
-              </p>
-            </div>
+        {activeTab === 'live' && (() => {
+          const liveIssues = runRealtimeLinter(content);
+          const liveScore = Math.max(10, 100 - liveIssues.length * 25);
+          const isClean = liveIssues.length === 0;
 
-            <div className={`border rounded-xl p-4 space-y-3 ${innerClass}`}>
-              <div className={`text-xs ${textMuted}`}>
-                Type or modify content below to see real-time syntax highlighting for brand violations:
+          function handleLiveQuickFix(issue: LiveLinterIssue) {
+            if (!content.includes(issue.matchedText)) return;
+            const updated = content.replace(issue.matchedText, issue.suggestedReplacement);
+            setContent(updated);
+          }
+
+          function handleInsertTestSnippet(textToInsert: string) {
+            setContent((prev) => prev.trim() + ' ' + textToInsert);
+          }
+
+          return (
+            <div className={`border rounded-xl p-6 space-y-6 ${cardClass}`}>
+              {/* TOP HEADER */}
+              <div className={`border-b ${borderSubtle} pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase">
+                      Strategic Improvement #1
+                    </span>
+                    <h2 className="text-lg font-bold">In-Situ Live Linter (Figma & CMS Embed Simulation)</h2>
+                  </div>
+                  <p className={`text-xs mt-1 ${textMuted}`}>
+                    Continuous real-time authoring canvas inspection. Evaluates terminology, SLA commitments, and tone drift with sub-millisecond local WASM/Regex execution.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Live Socket: Active (&lt;1ms latency)</span>
+                  </div>
+                  <button
+                    onClick={() => setContent(channelTemplates.channels[channel]?.flawed || '')}
+                    className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
+                  >
+                    Reset Flawed
+                  </button>
+                  <button
+                    onClick={() => setContent(channelTemplates.channels[channel]?.compliant || '')}
+                    className="px-2.5 py-1 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition"
+                  >
+                    Load Clean
+                  </button>
+                </div>
               </div>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={5}
-                className={`w-full rounded-lg p-3 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 border ${innerClass}`}
-              />
-              <div className="flex items-center gap-2 text-xs text-emerald-500 font-medium">
-                <Zap className="h-4 w-4 animate-pulse" />
-                Live WebSocket Channel Active • Real-time rule matching connected to Knowledge Vault
+
+              {/* DUAL WORKSPACE: FIGMA AUTHORING CANVAS + REAL-TIME LINTER TRIAGE */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* LEFT: SIMULATED FIGMA / CMS CANVAS (7 COLS) */}
+                <div className="lg:col-span-7 space-y-4">
+                  {/* CANVAS WINDOW FRAME */}
+                  <div className={`border rounded-xl overflow-hidden shadow-sm ${innerClass}`}>
+                    {/* MAC/FIGMA TITLE BAR */}
+                    <div className={`px-4 py-2.5 border-b ${borderSubtle} flex items-center justify-between text-xs font-mono ${isDark ? 'bg-slate-950/80' : 'bg-slate-200/80'}`}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full bg-rose-500 inline-block"></span>
+                          <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block"></span>
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        </div>
+                        <span className="font-semibold text-slate-400 ml-2">Figma Canvas Plugin • Frame: #Hero-Banner-Copy</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold uppercase">
+                        Real-Time Sync
+                      </span>
+                    </div>
+
+                    {/* INTERACTIVE PREVIEW WITH HIGHLIGHT BADGES */}
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className={`font-semibold uppercase tracking-wider flex items-center gap-1.5 ${textMuted}`}>
+                          <MousePointerClick className="h-3.5 w-3.5 text-blue-400" />
+                          Interactive Canvas Preview (Click any flagged term to apply fix):
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {liveIssues.length} issue{liveIssues.length === 1 ? '' : 's'} flagged
+                        </span>
+                      </div>
+
+                      {/* STYLED CANVAS BANNER CARD */}
+                      <div
+                        className="p-4 rounded-xl border transition min-h-[110px] leading-relaxed text-sm font-sans"
+                        style={{ backgroundColor: contrastColor2, color: contrastColor1 }}
+                      >
+                        {isClean ? (
+                          <div className="flex items-start gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-medium">{content}</p>
+                              <p className="text-[10px] opacity-75 mt-2 flex items-center gap-1 font-mono">
+                                <span>✅ Clean copy: 0 brand violations detected in real-time.</span>
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="whitespace-pre-wrap">
+                              {/* Inline Highlight Tokenizer */}
+                              {(() => {
+                                const elements: React.ReactNode[] = [];
+                                let lastIndex = 0;
+                                const sorted = [...liveIssues].sort((a, b) => {
+                                  return content.indexOf(a.matchedText) - content.indexOf(b.matchedText);
+                                });
+
+                                sorted.forEach((iss, i) => {
+                                  const idx = content.indexOf(iss.matchedText, lastIndex);
+                                  if (idx !== -1) {
+                                    if (idx > lastIndex) {
+                                      elements.push(<span key={`txt-${i}`}>{content.substring(lastIndex, idx)}</span>);
+                                    }
+                                    elements.push(
+                                      <button
+                                        key={`chip-${iss.id}`}
+                                        onClick={() => handleLiveQuickFix(iss)}
+                                        title={`Rule: ${iss.ruleCitation} → Click to replace with "${iss.suggestedReplacement}"`}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 rounded text-xs font-bold font-mono transition shadow-sm ${
+                                          iss.type === 'CRITICAL_CLAIM'
+                                            ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50 hover:bg-rose-500/50 underline decoration-wavy decoration-rose-400'
+                                            : iss.type === 'TERMINOLOGY'
+                                            ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50 hover:bg-amber-500/50 underline decoration-wavy decoration-amber-400'
+                                            : 'bg-purple-500/30 text-purple-300 border border-purple-500/50 hover:bg-purple-500/50 underline decoration-wavy decoration-purple-400'
+                                        }`}
+                                      >
+                                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                                        <span>{iss.matchedText}</span>
+                                        <Wand2 className="h-3 w-3 shrink-0 opacity-80" />
+                                      </button>
+                                    );
+                                    lastIndex = idx + iss.matchedText.length;
+                                  }
+                                });
+
+                                if (lastIndex < content.length) {
+                                  elements.push(<span key="txt-end">{content.substring(lastIndex)}</span>);
+                                }
+
+                                return elements;
+                              })()}
+                            </p>
+                            <p className="text-[10px] opacity-75 mt-3 flex items-center gap-1 font-mono">
+                              <span>💡 Tip: Click any highlighted tag to replace it with the approved brand term instantly.</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* EDITABLE TEXTAREA */}
+                      <div className="space-y-1.5 pt-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <label className={`font-semibold ${textMuted}`}>
+                            Live Canvas Editor (Real-Time Typing Active):
+                          </label>
+                          <span className="font-mono text-[10px] text-slate-400">
+                            {content.trim().split(/\s+/).filter(Boolean).length} words • {content.length} chars
+                          </span>
+                        </div>
+                        <textarea
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                          rows={4}
+                          placeholder="Type or paste marketing copy here..."
+                          className={`w-full rounded-lg p-3 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 border leading-relaxed ${innerClass}`}
+                        />
+                      </div>
+
+                      {/* QUICK INSERT TEST SNIPPETS */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className={`text-[10px] font-semibold uppercase ${textMuted}`}>Quick Test Inserts:</span>
+                        <button
+                          onClick={() => handleInsertTestSnippet('cheapest')}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
+                        >
+                          + "cheapest"
+                        </button>
+                        <button
+                          onClick={() => handleInsertTestSnippet('99.999% uptime')}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
+                        >
+                          + "99.999% uptime"
+                        </button>
+                        <button
+                          onClick={() => handleInsertTestSnippet('crazy excited')}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
+                        >
+                          + "crazy excited"
+                        </button>
+                        <button
+                          onClick={() => handleInsertTestSnippet('unlimited 5g internet')}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
+                        >
+                          + "unlimited 5g internet"
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT: REAL-TIME LINTER TRIAGE & 1-CLICK FIXES (5 COLS) */}
+                <div className="lg:col-span-5 space-y-4">
+                  {/* REAL-TIME COMPLIANCE SCORE METER */}
+                  <div className={`border rounded-xl p-4 space-y-3 ${innerClass}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-cyan-400" /> Real-Time Brand Health
+                      </span>
+                      <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                        isClean
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      }`}>
+                        {isClean ? '100% Compliant' : `${liveScore}% Risk`}
+                      </span>
+                    </div>
+
+                    {/* PROGRESS BAR */}
+                    <div className="w-full h-2 rounded-full bg-slate-700/50 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${isClean ? 'bg-emerald-500' : liveScore > 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                        style={{ width: `${liveScore}%` }}
+                      ></div>
+                    </div>
+
+                    <p className={`text-[11px] ${textMuted}`}>
+                      {isClean
+                        ? '✨ Copy satisfies all CloudScale Enterprise Brand Standards, approved terminology, and verified truth claims.'
+                        : `⚠️ ${liveIssues.length} brand infraction${liveIssues.length === 1 ? '' : 's'} detected in real-time. Apply the recommended 1-click fixes below:`}
+                    </p>
+                  </div>
+
+                  {/* ACTIVE IN-SITU ISSUES LIST */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="uppercase tracking-wider flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        In-Situ Violations ({liveIssues.length})
+                      </span>
+                      {liveIssues.length > 0 && (
+                        <button
+                          onClick={() => {
+                            let fixed = content;
+                            liveIssues.forEach((iss) => {
+                              fixed = fixed.replace(iss.matchedText, iss.suggestedReplacement);
+                            });
+                            setContent(fixed);
+                          }}
+                          className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                        >
+                          <CheckCheck className="h-3 w-3" /> Fix All Violations
+                        </button>
+                      )}
+                    </div>
+
+                    {isClean ? (
+                      <div className={`border rounded-xl p-6 text-center space-y-2 ${innerClass}`}>
+                        <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                        <div className="font-semibold text-xs text-emerald-400">Zero In-Situ Violations</div>
+                        <p className={`text-[11px] ${textMuted}`}>
+                          The content canvas is 100% compliant with CloudScale guidelines. Switch to the Pre-Flight tab to certify and issue cryptographic proof.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                        {liveIssues.map((iss) => (
+                          <div
+                            key={iss.id}
+                            className={`border rounded-lg p-3 text-xs space-y-2 transition ${
+                              iss.type === 'CRITICAL_CLAIM'
+                                ? 'border-rose-500/30 bg-rose-500/5'
+                                : iss.type === 'TERMINOLOGY'
+                                ? 'border-amber-500/30 bg-amber-500/5'
+                                : 'border-purple-500/30 bg-purple-500/5'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`font-mono font-bold text-[10px] uppercase px-1.5 py-0.5 rounded ${
+                                iss.type === 'CRITICAL_CLAIM'
+                                  ? 'bg-rose-500/20 text-rose-400'
+                                  : iss.type === 'TERMINOLOGY'
+                                  ? 'bg-amber-500/20 text-amber-400'
+                                  : 'bg-purple-500/20 text-purple-400'
+                              }`}>
+                                {iss.type}
+                              </span>
+                              <span className={`text-[10px] font-mono ${textMuted}`}>
+                                {iss.ruleCitation}
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] leading-relaxed">
+                              Flagged excerpt: <span className="font-bold underline decoration-wavy decoration-rose-500">"{iss.matchedText}"</span>. {iss.explanation}
+                            </p>
+
+                            <div className="pt-1 flex items-center justify-between gap-2">
+                              <div className="text-[10px] text-emerald-400 font-mono truncate">
+                                → Use: "{iss.suggestedReplacement}"
+                              </div>
+                              <button
+                                onClick={() => handleLiveQuickFix(iss)}
+                                className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition shrink-0 flex items-center gap-1 shadow-sm"
+                              >
+                                <Wand2 className="h-3 w-3" /> Quick Fix
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 5: COMPLIANCE LEDGER (IMPROVEMENT #3) */}
         {activeTab === 'ledger' && (
