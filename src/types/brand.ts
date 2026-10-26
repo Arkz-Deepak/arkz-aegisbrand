@@ -4,9 +4,9 @@ export interface BrandGuideline {
   version: string;
   lastUpdated: string;
   toneArchetypes: {
-    primary: string; // e.g. "Authoritative, Empathetic, Clear"
-    avoid: string[]; // e.g. ["Hype-driven superlatives", "Overly casual slang", "Snark"]
-    readingLevel: string; // e.g. "Grade 8-10"
+    primary: string;
+    avoid: string[];
+    readingLevel: string;
   };
   prohibitedTerms: {
     term: string;
@@ -27,7 +27,7 @@ export interface BrandGuideline {
   visualRules: {
     primaryPalette: { name: string; hex: string }[];
     secondaryPalette: { name: string; hex: string }[];
-    minContrastRatio: number; // e.g. 4.5 for WCAG AA
+    minContrastRatio: number;
     logoRules: {
       minExclusionZonePx: number;
       allowInversion: boolean;
@@ -69,10 +69,15 @@ export interface VisualCheckResult {
 export interface VerificationReport {
   assetId: string;
   timestamp: string;
-  overallScore: number; // 0 - 100
+  engineUsed: 'GEMINI_LIVE' | 'DETERMINISTIC';
+  modelUsed?: string;
+  latencyMs?: number;
+  apiDebugInfo?: string;
+  overallScore: number;
   toneAlignmentScore: number;
   factualAccuracyScore: number;
   visualAdherenceScore: number;
+  channelContext?: string;
   issues: VerificationIssue[];
   visualCheck?: VisualCheckResult;
   status: 'PENDING_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED';

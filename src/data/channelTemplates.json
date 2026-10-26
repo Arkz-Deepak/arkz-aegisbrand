@@ -1,0 +1,24 @@
+{
+  "channels": {
+    "Paid Digital Ad": {
+      "flawed": "🚀 We are crazy excited to announce CloudScale 3.0! It is the cheapest and most bulletproof AI cloud on the planet. We are the #1 Rated AI Cloud in the World and guarantee 99.999% uptime with zero exceptions. Plus, every customer gets unlimited GPU inference with zero throttling. Sign up today and start crushing your AI development!",
+      "compliant": "CloudScale announces the general availability of its Next-Generation Enterprise AI Infrastructure. Recognized as a Strong Performer in the 2026 Cloud AI Infrastructure Evaluation, the platform delivers scalable high-capacity inference backed by a financially-supported 99.95% enterprise SLA."
+    },
+    "Press Release": {
+      "flawed": "FOR IMMEDIATE RELEASE: CloudScale today declared itself the undisputed champion of the AI market. Our revolutionary cloud never goes down, making competitor offerings look completely broken. Furthermore, we promise zero-cost unlimited database tiering for all fortune 500 customers with zero data footprint anywhere.",
+      "compliant": "SAN FRANCISCO, CA — CloudScale today announced major updates to its enterprise cloud platform. Operating under Enterprise SLA v2026.1, CloudScale guarantees 99.95% availability backed by financial service credits. Customer data is encrypted using AES-256 at rest and TLS 1.3 in transit."
+    },
+    "Blog Post": {
+      "flawed": "Hey devs! Today we're dropping our newest v1.2 Cloud Engine update and it is insane speed! It's completely unhackable and 10x faster than AWS or GCP without even breaking a sweat. We also added dedicated Slack support to our $49/month developer tier, so go crazy!",
+      "compliant": "In this technical deep dive, we explore CloudScale's multi-tenant architecture and security controls. Using defense-in-depth security, customer workloads remain isolated with comprehensive VPC controls. Dedicated Slack support is available on our Enterprise Growth tier ($499/mo)."
+    },
+    "Social Media Copy": {
+      "flawed": "Stop wasting cash on slow clouds! CloudScale is the cheapest, most bulletproof cloud ever built. 100% uptime guaranteed! Click the link below to get unlimited AI credits right now #winning #gamechanger",
+      "compliant": "Accelerate your AI workloads with enterprise reliability. CloudScale delivers scalable, high-capacity inference backed by our verified 99.95% SLA. Learn how enterprise leaders scale with confidence: cloudscale.ai/enterprise"
+    },
+    "Whitepaper Deck": {
+      "flawed": "Executive Summary: CloudScale delivers bulletproof cybersecurity with zero data footprint anywhere. Our system is winner of every AI benchmark, providing unlimited GPU memory with 99.999% uptime with zero exceptions.",
+      "compliant": "Executive Summary: CloudScale provides resilient enterprise cloud infrastructure. Security controls are governed by AES-256 encryption at rest, TLS 1.3 in transit, and verified 99.95% service availability under Enterprise Master Agreement Section 4.2."
+    }
+  }
+}

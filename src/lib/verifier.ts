@@ -1,21 +1,33 @@
 import { BrandGuideline, VerificationIssue, VerificationReport, RewriteOption, VisualCheckResult } from '@/types/brand';
 
+const CANDIDATE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-pro',
+];
+
 export async function verifyContentWithGemini(
   content: string,
   guideline: BrandGuideline,
-  apiKey?: string
+  apiKey?: string,
+  channel?: string
 ): Promise<VerificationReport> {
-  // If an API key is provided, attempt live Gemini call
+  const startTime = performance.now();
   const activeKey = apiKey || process.env.GEMINI_API_KEY;
 
   if (activeKey) {
-    try {
-      const prompt = `
-You are the core inspection engine of AegisBrand AI, an enterprise pre-publication brand governance platform.
-Analyze the following marketing/content copy against the provided brand guidelines.
+    let lastError: string | null = null;
+
+    for (const model of CANDIDATE_MODELS) {
+      try {
+        const prompt = `
+You are the core brand-governance inspection engine of AegisBrand AI for Team ARKZ.
+Channel Context: ${channel || 'Digital Marketing'}
+Analyze the following marketing/content copy strictly against the provided brand guidelines.
 
 BRAND GUIDELINES:
-- Name: ${guideline.name} (v${guideline.version})
+- Brand Name: ${guideline.name} (v${guideline.version})
 - Approved Tone: ${guideline.toneArchetypes.primary}
 - Tones to Avoid: ${guideline.toneArchetypes.avoid.join(', ')}
 - Prohibited Terms: ${JSON.stringify(guideline.prohibitedTerms)}
@@ -28,16 +40,16 @@ ${content}
 """
 
 TASK:
-1. Detect any unverified claims, false SLA promises, or factual errors.
-2. Detect tone drift (e.g. overly casual, hype, superlatives).
-3. Detect prohibited terminology.
-4. For each issue, explain why it was flagged, cite the exact source guideline, assess the risk (e.g., FTC regulatory risk, SLA breach), and provide THREE ranked rewrite options that preserve the creator's original intent:
-   - "Conservative": Strictly compliant, legal-approved phrasing.
+1. Detect unverified promotional claims, false SLA promises, or factual errors.
+2. Detect tone drift (e.g. overly casual tech-bro slang, hype, non-authoritative).
+3. Detect prohibited terminology and superlatives.
+4. For each issue, explain why it was flagged, cite the exact source guideline, assess the risk (e.g. FTC regulatory liability, SLA contract breach), and generate THREE ranked rewrite options that preserve creator intent:
+   - "Conservative": Legally approved, compliant phrasing.
    - "Balanced": Professional, engaging, and compliant.
    - "Creative": High-energy, punchy marketing copy that still stays within brand bounds.
 5. Provide overall adherence score (0-100), tone score, and factual accuracy score.
 
-Return STRICT JSON format matching this schema:
+Return STRICT JSON matching this schema:
 {
   "overallScore": number,
   "toneAlignmentScore": number,
@@ -61,55 +73,76 @@ Return STRICT JSON format matching this schema:
 }
 `;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${activeKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.2,
-            },
-          }),
-        }
-      );
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.2,
+                responseMimeType: 'application/json',
+              },
+            }),
+          }
+        );
 
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text);
-          return {
-            assetId: `ast-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            overallScore: parsed.overallScore ?? 85,
-            toneAlignmentScore: parsed.toneAlignmentScore ?? 85,
-            factualAccuracyScore: parsed.factualAccuracyScore ?? 85,
-            visualAdherenceScore: 100,
-            issues: parsed.issues || [],
-            status: parsed.issues?.length > 0 ? 'CHANGES_REQUESTED' : 'APPROVED',
-          };
+        if (response.ok) {
+          const data = await response.json();
+          let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
+            rawText = rawText.replace(/```json\n?|\n?```/g, '').trim();
+            const parsed = JSON.parse(rawText);
+            const latencyMs = Math.round(performance.now() - startTime);
+
+            return {
+              assetId: `ast-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              engineUsed: 'GEMINI_LIVE',
+              modelUsed: model,
+              latencyMs,
+              apiDebugInfo: `Live response generated via Google AI Studio API (${model}) in ${latencyMs}ms.`,
+              overallScore: Math.min(100, Math.max(10, parsed.overallScore ?? 85)),
+              toneAlignmentScore: Math.min(100, Math.max(10, parsed.toneAlignmentScore ?? 85)),
+              factualAccuracyScore: Math.min(100, Math.max(10, parsed.factualAccuracyScore ?? 85)),
+              visualAdherenceScore: 100,
+              channelContext: channel,
+              issues: parsed.issues || [],
+              status: (parsed.issues?.length ?? 0) > 0 ? 'CHANGES_REQUESTED' : 'APPROVED',
+            };
+          }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          lastError = `HTTP ${response.status} on ${model}: ${errData.error?.message || response.statusText}`;
         }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        lastError = `Error calling ${model}: ${message}`;
       }
-    } catch (err) {
-      console.warn('Gemini live call error, falling back to deterministic engine:', err);
     }
+
+    console.warn('All Gemini models attempted failed, falling back to deterministic engine:', lastError);
+    const deterministicReport = runDeterministicVerification(content, guideline, channel);
+    deterministicReport.apiDebugInfo = `Gemini API Key provided, but call returned: ${lastError}. Falling back to deterministic engine.`;
+    return deterministicReport;
   }
 
-  // Deterministic Rule & Semantic Verification Engine (Guaranteed zero downtime for judges)
-  return runDeterministicVerification(content, guideline);
+  // Deterministic Rule & Semantic Verification Engine
+  const report = runDeterministicVerification(content, guideline, channel);
+  report.apiDebugInfo = 'No GEMINI_API_KEY detected in environment or request. Local deterministic rule & semantic engine active.';
+  return report;
 }
 
 export function runDeterministicVerification(
   content: string,
-  guideline: BrandGuideline
+  guideline: BrandGuideline,
+  channel?: string
 ): VerificationReport {
   const issues: VerificationIssue[] = [];
   const lowerContent = content.toLowerCase();
 
-  // 1. Prohibited Terms Check
+  // 1. Prohibited Terms Check from Guideline
   guideline.prohibitedTerms.forEach((item, idx) => {
     const termLower = item.term.toLowerCase();
     const regex = new RegExp(`\\b${escapeRegExp(termLower)}\\b`, 'gi');
@@ -122,7 +155,7 @@ export function runDeterministicVerification(
         severity: 'high',
         flaggedExcerpt: excerpt,
         ruleCitation: `Brand Terminology Policy, Section 3.2 ("${item.term}")`,
-        explanation: `The term "${excerpt}" is explicitly prohibited in enterprise collateral. ${item.reason}`,
+        explanation: `The term "${excerpt}" is prohibited in enterprise collateral. ${item.reason}`,
         riskAssessment: 'Damages brand positioning and creates potential legal/contractual vulnerability.',
         suggestions: [
           {
@@ -179,8 +212,57 @@ export function runDeterministicVerification(
     });
   });
 
-  // 3. Tone Drift Heuristics
-  const casualSlang = ['crazy excited', 'crushing it', 'game changer', 'unbelievable', 'insane speed'];
+  // 3. Dynamic Superlatives & Over-promising
+  const unverifiedSuperlatives = [
+    { word: '#1', reason: 'Unsubstantiated market claim without third-party auditor citation.' },
+    { word: 'undisputed champion', reason: 'Aggressive marketing claim lacking factual verification.' },
+    { word: 'never goes down', reason: 'Absolutist SLA assertion violating contract boundaries.' },
+    { word: 'completely broken', reason: 'Direct competitor disparagement breaching professional guidelines.' },
+    { word: 'zero data footprint anywhere', reason: 'Technically inaccurate and legally unsupportable claim.' },
+    { word: 'completely unhackable', reason: 'Misleading cybersecurity assertion violating compliance standards.' },
+    { word: 'winner of every ai benchmark', reason: 'Uncited competitive ranking assertion.' },
+  ];
+
+  unverifiedSuperlatives.forEach((item, idx) => {
+    if (lowerContent.includes(item.word.toLowerCase())) {
+      const match = new RegExp(`\\b${escapeRegExp(item.word)}\\b`, 'i').exec(content);
+      const excerpt = match ? match[0] : item.word;
+      if (!issues.some((i) => i.flaggedExcerpt.toLowerCase() === excerpt.toLowerCase())) {
+        issues.push({
+          id: `sup-${idx}-${Date.now()}`,
+          type: 'CRITICAL_CLAIM',
+          severity: 'high',
+          flaggedExcerpt: excerpt,
+          ruleCitation: 'Enterprise Claims & Truth-in-Advertising Policy v2.4',
+          explanation: `The claim "${excerpt}" is an unsupported superlative. ${item.reason}`,
+          riskAssessment: 'Violates truth-in-advertising guidelines and creates reputational liability.',
+          suggestions: [
+            {
+              style: 'Conservative',
+              text: 'recognized as an industry leader',
+              rationale: 'Temperate phrasing referencing third-party evaluations.',
+            },
+            {
+              style: 'Balanced',
+              text: 'high-performance enterprise solution',
+              rationale: 'Focuses on architectural capability without ungrounded ranking claims.',
+            },
+            {
+              style: 'Creative',
+              text: 'trusted by leading global organizations',
+              rationale: 'Customer-focused social proof.',
+            },
+          ],
+        });
+      }
+    }
+  });
+
+  // 4. Tone Drift Heuristics
+  const casualSlang = [
+    'crazy excited', 'crushing it', 'game changer', 'unbelievable', 'insane speed',
+    'stop wasting cash', 'go crazy', 'winning', '#winning', '#gamechanger'
+  ];
   casualSlang.forEach((phrase, idx) => {
     if (lowerContent.includes(phrase)) {
       issues.push({
@@ -199,7 +281,7 @@ export function runDeterministicVerification(
           },
           {
             style: 'Balanced',
-            text: 'excited to present',
+            text: 'delighted to announce',
             rationale: 'Enthusiastic without relying on hyperbole.',
           },
           {
@@ -226,10 +308,12 @@ export function runDeterministicVerification(
   return {
     assetId: `ast-${Date.now()}`,
     timestamp: new Date().toISOString(),
+    engineUsed: 'DETERMINISTIC',
     overallScore,
     toneAlignmentScore: Math.max(20, 100 - toneIssues * 25),
     factualAccuracyScore: Math.max(10, 100 - claimIssues * 40),
     visualAdherenceScore: 100,
+    channelContext: channel,
     issues,
     status: issues.length > 0 ? 'CHANGES_REQUESTED' : 'APPROVED',
   };
