@@ -1,30 +1,38 @@
 import { BrandGuideline, VerificationIssue, VerificationReport, RewriteOption, VisualCheckResult } from '@/types/brand';
 
 const CANDIDATE_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-pro',
+  'gemini-3.8-flash-exp',
+  'gemini-3.7-flash-exp',
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-2.5-flash',
-  'gemini-1.5-pro',
 ];
 
 export async function verifyContentWithGemini(
   content: string,
   guideline: BrandGuideline,
   apiKey?: string,
-  channel?: string
+  channel?: string,
+  preferredModel?: string
 ): Promise<VerificationReport> {
   const startTime = performance.now();
   const activeKey = apiKey || process.env.GEMINI_API_KEY;
 
   if (activeKey) {
     let lastError: string | null = null;
+    const modelsToTry = preferredModel
+      ? [preferredModel, ...CANDIDATE_MODELS.filter((m) => m !== preferredModel)]
+      : CANDIDATE_MODELS;
 
-    for (const model of CANDIDATE_MODELS) {
+    for (const model of modelsToTry) {
       try {
         const prompt = `
 You are the core brand-governance inspection engine of AegisBrand AI for Team ARKZ.
 Channel Context: ${channel || 'Digital Marketing'}
-Analyze the following marketing/content copy strictly against the provided brand guidelines.
+Inspect the following copy against the provided Brand Knowledge Vault.
 
 BRAND GUIDELINES:
 - Brand Name: ${guideline.name} (v${guideline.version})
@@ -42,7 +50,7 @@ ${content}
 TASK:
 1. Detect unverified promotional claims, false SLA promises, or factual errors.
 2. Detect tone drift (e.g. overly casual tech-bro slang, hype, non-authoritative).
-3. Detect prohibited terminology and superlatives.
+3. Detect prohibited terminology and unverified superlatives.
 4. For each issue, explain why it was flagged, cite the exact source guideline, assess the risk (e.g. FTC regulatory liability, SLA contract breach), and generate THREE ranked rewrite options that preserve creator intent:
    - "Conservative": Legally approved, compliant phrasing.
    - "Balanced": Professional, engaging, and compliant.
@@ -102,7 +110,7 @@ Return STRICT JSON matching this schema:
               engineUsed: 'GEMINI_LIVE',
               modelUsed: model,
               latencyMs,
-              apiDebugInfo: `Live response generated via Google AI Studio API (${model}) in ${latencyMs}ms.`,
+              apiDebugInfo: `Live verification executed via Google Gemini (${model}) in ${latencyMs}ms.`,
               overallScore: Math.min(100, Math.max(10, parsed.overallScore ?? 85)),
               toneAlignmentScore: Math.min(100, Math.max(10, parsed.toneAlignmentScore ?? 85)),
               factualAccuracyScore: Math.min(100, Math.max(10, parsed.factualAccuracyScore ?? 85)),
@@ -124,7 +132,7 @@ Return STRICT JSON matching this schema:
 
     console.warn('All Gemini models attempted failed, falling back to deterministic engine:', lastError);
     const deterministicReport = runDeterministicVerification(content, guideline, channel);
-    deterministicReport.apiDebugInfo = `Gemini API Key provided, but call returned: ${lastError}. Falling back to deterministic engine.`;
+    deterministicReport.apiDebugInfo = `Gemini API attempt on [${modelsToTry.join(', ')}] returned: ${lastError}. Local deterministic engine active.`;
     return deterministicReport;
   }
 

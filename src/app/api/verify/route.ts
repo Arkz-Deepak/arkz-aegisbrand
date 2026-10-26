@@ -10,12 +10,13 @@ export async function POST(req: Request) {
     const guideline: BrandGuideline = body.guideline || defaultGuidelines;
     const apiKey = body.apiKey || process.env.GEMINI_API_KEY;
     const channel = body.channel || 'Digital Marketing';
+    const preferredModel = body.preferredModel || 'gemini-3.8-flash';
 
     if (!content.trim()) {
       return NextResponse.json({ error: 'Content is required for verification' }, { status: 400 });
     }
 
-    const report = await verifyContentWithGemini(content, guideline, apiKey, channel);
+    const report = await verifyContentWithGemini(content, guideline, apiKey, channel, preferredModel);
     return NextResponse.json(report);
   } catch (error) {
     console.error('Error verifying content:', error);

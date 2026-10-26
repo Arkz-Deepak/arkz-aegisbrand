@@ -44,6 +44,7 @@ export default function AegisBrandApp() {
   const [channel, setChannel] = useState<ChannelKey>('Paid Digital Ad');
   const [content, setContent] = useState<string>(channelTemplates.channels['Paid Digital Ad'].flawed);
   const [apiKey, setApiKey] = useState<string>('');
+  const [preferredModel, setPreferredModel] = useState<string>('gemini-3.8-flash');
   const [apiKeyStatus, setApiKeyStatus] = useState<{ testing: boolean; message?: string; valid?: boolean }>({ testing: false });
   const [showApiDrawer, setShowApiDrawer] = useState<boolean>(false);
   const [guidelines, setGuidelines] = useState<BrandGuideline>(defaultGuidelines as unknown as BrandGuideline);
@@ -110,6 +111,7 @@ export default function AegisBrandApp() {
           guideline: guidelines,
           apiKey: apiKey || undefined,
           channel: channelContext,
+          preferredModel: preferredModel || 'gemini-3.8-flash',
         }),
       });
 
@@ -311,19 +313,30 @@ export default function AegisBrandApp() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              <select
+                value={preferredModel}
+                onChange={(e) => setPreferredModel(e.target.value)}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${innerClass}`}
+                title="Select Target Gemini Model"
+              >
+                <option value="gemini-3.8-flash">⚡ Gemini 3.8 Flash (Active / Primary)</option>
+                <option value="gemini-3.7-flash">🎯 Gemini 3.7 Flash</option>
+                <option value="gemini-3.8-pro">🧠 Gemini 3.8 Pro</option>
+                <option value="gemini-2.5-flash">🚀 Gemini 2.5 Flash</option>
+              </select>
               <input
                 type="password"
                 placeholder="Paste Gemini API Key (or leave empty to use Vercel env)"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className={`px-3 py-1.5 rounded-lg border text-xs w-full md:w-80 focus:outline-none focus:ring-1 focus:ring-blue-500 ${innerClass}`}
+                className={`px-3 py-1.5 rounded-lg border text-xs w-full md:w-72 focus:outline-none focus:ring-1 focus:ring-blue-500 ${innerClass}`}
               />
               <button
                 onClick={() => testApiKeyOnLoad(apiKey)}
                 disabled={apiKeyStatus.testing}
                 className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1"
               >
-                {apiKeyStatus.testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Test Key'}
+                {apiKeyStatus.testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Ping Gemini 3.8'}
               </button>
             </div>
           </div>
@@ -521,6 +534,13 @@ export default function AegisBrandApp() {
                       {report.latencyMs && <span>Latency: {report.latencyMs}ms</span>}
                       <span>Channel: {report.channelContext || channel}</span>
                     </div>
+
+                    {report.apiDebugInfo && (
+                      <div className="w-full text-[10px] opacity-80 font-mono mt-1 pt-1 border-t border-current/20 flex items-center gap-1">
+                        <Info className="h-3 w-3 shrink-0" />
+                        <span>{report.apiDebugInfo}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
