@@ -320,9 +320,10 @@ export default function AegisBrandApp() {
                 title="Select Target Gemini Model"
               >
                 <option value="gemini-3.8-flash">⚡ Gemini 3.8 Flash (Active / Primary)</option>
+                <option value="gemini-3-flash-preview">✨ Gemini 3 Flash Preview (Live & Fast)</option>
+                <option value="gemini-2.5-flash">🚀 Gemini 2.5 Flash (Live)</option>
                 <option value="gemini-3.7-flash">🎯 Gemini 3.7 Flash</option>
                 <option value="gemini-3.8-pro">🧠 Gemini 3.8 Pro</option>
-                <option value="gemini-2.5-flash">🚀 Gemini 2.5 Flash</option>
               </select>
               <input
                 type="password"

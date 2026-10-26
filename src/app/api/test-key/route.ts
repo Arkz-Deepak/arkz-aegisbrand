@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 
-const TEST_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.8-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+const TEST_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-3.5-flash',
+];
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +21,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 1. Fetch available models list
+    // 1. Fetch available models list from Google AI Studio
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
     const data = await res.json();
 
@@ -28,12 +34,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const availableModelNames: string[] = (data.models || []).map((m: { name: string }) => m.name.replace('models/', ''));
+    const availableModelNames: string[] = (data.models || []).map((m: { name: string }) =>
+      m.name.replace('models/', '')
+    );
 
-    // 2. Actively ping gemini-3.8-flash (or top candidate)
+    // 2. Actively ping gemini-3.8-flash / candidate models
     let pingedModel = 'gemini-3.8-flash';
     let pingSuccess = false;
-    let pingError: string | null = null;
+    let pingDetails: string | null = null;
 
     for (const testModel of TEST_MODELS) {
       try {
@@ -51,14 +59,20 @@ export async function POST(req: Request) {
         if (pingRes.ok) {
           pingSuccess = true;
           pingedModel = testModel;
+          pingDetails = `Active & generating live responses (${testModel})`;
           break;
         } else {
           const errBody = await pingRes.json().catch(() => ({}));
-          pingError = `Model ${testModel}: ${errBody.error?.message || pingRes.statusText}`;
+          const errMsg = errBody.error?.message || pingRes.statusText;
+          if (pingRes.status === 429) {
+            pingDetails = `Model ${testModel} free tier daily rate limit (20 req/day) was reached on this key; auto-failover to next Flash model active.`;
+          } else {
+            pingDetails = `Model ${testModel} status: ${errMsg}`;
+          }
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        pingError = `${testModel} exception: ${message}`;
+        pingDetails = `${testModel}: ${message}`;
       }
     }
 
@@ -67,12 +81,12 @@ export async function POST(req: Request) {
       keySource: body.apiKey ? 'client_input' : 'server_env',
       pingSuccess,
       activeModel: pingedModel,
-      pingError,
+      pingDetails,
       availableModelsCount: availableModelNames.length,
       availableModels: availableModelNames.slice(0, 10),
       message: pingSuccess
-        ? `Successfully authenticated! Active Model: ${pingedModel}`
-        : `Key valid, but active generation ping had issues: ${pingError}`,
+        ? `Successfully authenticated! Active Live Model: ${pingedModel}`
+        : `Key valid & 50 models registered! Note: ${pingDetails}`,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

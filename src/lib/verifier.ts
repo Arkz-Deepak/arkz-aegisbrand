@@ -2,13 +2,8 @@ import { BrandGuideline, VerificationIssue, VerificationReport, RewriteOption, V
 
 const CANDIDATE_MODELS = [
   'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-3.8-pro',
-  'gemini-3.8-flash-exp',
-  'gemini-3.7-flash-exp',
+  'gemini-3-flash-preview',
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
 ];
 
 export async function verifyContentWithGemini(
@@ -23,6 +18,8 @@ export async function verifyContentWithGemini(
 
   if (activeKey) {
     let lastError: string | null = null;
+    let quotaExceededModel: string | null = null;
+
     const modelsToTry = preferredModel
       ? [preferredModel, ...CANDIDATE_MODELS.filter((m) => m !== preferredModel)]
       : CANDIDATE_MODELS;
@@ -81,20 +78,26 @@ Return STRICT JSON matching this schema:
 }
 `;
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 18000);
+
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
           {
             method: 'POST',
+            signal: controller.signal,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               generationConfig: {
                 temperature: 0.2,
                 responseMimeType: 'application/json',
+                ...(model.includes('preview') || model === 'gemini-3-flash-preview' ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
               },
             }),
           }
         );
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const data = await response.json();
@@ -104,35 +107,83 @@ Return STRICT JSON matching this schema:
             const parsed = JSON.parse(rawText);
             const latencyMs = Math.round(performance.now() - startTime);
 
+            // Normalize issue items
+            const issues: VerificationIssue[] = (parsed.issues || []).map((iss: Record<string, unknown> | string, idx: number) => {
+              if (typeof iss === 'string') {
+                return {
+                  id: `issue-${idx}-${Date.now()}`,
+                  type: 'CRITICAL_CLAIM',
+                  severity: 'high',
+                  flaggedExcerpt: iss.substring(0, 40),
+                  ruleCitation: 'Enterprise Claims Policy',
+                  explanation: iss,
+                  riskAssessment: 'Potential compliance or brand alignment risk.',
+                  suggestions: [
+                    { style: 'Conservative', text: 'compliant phrasing', rationale: 'Direct alignment' },
+                    { style: 'Balanced', text: 'professional phrasing', rationale: 'Brand balance' },
+                    { style: 'Creative', text: 'impactful phrasing', rationale: 'Creative engagement' },
+                  ],
+                };
+              }
+
+              const rawType = String(iss.type || '').toUpperCase();
+              let type: VerificationIssue['type'] = 'TERMINOLOGY';
+              if (rawType.includes('CLAIM') || rawType.includes('SLA') || rawType.includes('FACT') || rawType.includes('GUARANTEE')) {
+                type = 'CRITICAL_CLAIM';
+              } else if (rawType.includes('TONE') || rawType.includes('STYLE') || rawType.includes('VOICE')) {
+                type = 'TONE_DRIFT';
+              }
+
+              return {
+                id: String(iss.id || `issue-${idx}-${Date.now()}`),
+                type,
+                severity: (iss.severity === 'medium' || iss.severity === 'low') ? iss.severity : 'high',
+                flaggedExcerpt: String(iss.flaggedExcerpt || ''),
+                ruleCitation: String(iss.ruleCitation || 'Brand Guidelines v2.4'),
+                explanation: String(iss.explanation || 'Violates brand governance rules.'),
+                riskAssessment: String(iss.riskAssessment || 'Potential regulatory or brand alignment risk.'),
+                suggestions: Array.isArray(iss.suggestions) ? iss.suggestions : [],
+              };
+            });
+
+            let debugNote = `Live AI verified via Google Gemini (${model}) in ${latencyMs}ms.`;
+            if (quotaExceededModel) {
+              debugNote += ` (${quotaExceededModel} daily quota limit was reached, auto-routed to ${model}).`;
+            }
+
             return {
               assetId: `ast-${Date.now()}`,
               timestamp: new Date().toISOString(),
               engineUsed: 'GEMINI_LIVE',
               modelUsed: model,
               latencyMs,
-              apiDebugInfo: `Live verification executed via Google Gemini (${model}) in ${latencyMs}ms.`,
+              apiDebugInfo: debugNote,
               overallScore: Math.min(100, Math.max(10, parsed.overallScore ?? 85)),
               toneAlignmentScore: Math.min(100, Math.max(10, parsed.toneAlignmentScore ?? 85)),
               factualAccuracyScore: Math.min(100, Math.max(10, parsed.factualAccuracyScore ?? 85)),
               visualAdherenceScore: 100,
               channelContext: channel,
-              issues: parsed.issues || [],
-              status: (parsed.issues?.length ?? 0) > 0 ? 'CHANGES_REQUESTED' : 'APPROVED',
+              issues,
+              status: issues.length > 0 ? 'CHANGES_REQUESTED' : 'APPROVED',
             };
           }
         } else {
           const errData = await response.json().catch(() => ({}));
-          lastError = `HTTP ${response.status} on ${model}: ${errData.error?.message || response.statusText}`;
+          const errMsg = errData.error?.message || response.statusText;
+          if (response.status === 429) {
+            quotaExceededModel = model;
+          }
+          lastError = `HTTP ${response.status} on ${model}: ${errMsg}`;
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        lastError = `Error calling ${model}: ${message}`;
+        lastError = `Model ${model} (${message})`;
       }
     }
 
-    console.warn('All Gemini models attempted failed, falling back to deterministic engine:', lastError);
+    console.warn('Gemini models attempted had issues, falling back to deterministic engine:', lastError);
     const deterministicReport = runDeterministicVerification(content, guideline, channel);
-    deterministicReport.apiDebugInfo = `Gemini API attempt on [${modelsToTry.join(', ')}] returned: ${lastError}. Local deterministic engine active.`;
+    deterministicReport.apiDebugInfo = `Gemini call note: ${lastError}. Local deterministic engine provided instant fallback.`;
     return deterministicReport;
   }
 
