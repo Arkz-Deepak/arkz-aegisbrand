@@ -122,7 +122,7 @@ html_content = """<!DOCTYPE html>
     </div>
 
     <div class="callout-green">
-      <strong>Round 2 Build Mandate Delivered:</strong> Content goes in $\rightarrow$ verified against approved brand guidelines and factual truth specs $\rightarrow$ issues returned explained with verbatim rule citations and 3 intent-preserving rewrites $\rightarrow$ human reviewer decides and issues a cryptographically signed compliance certificate (SHA-256).
+      <strong>Round 2 Build Mandate Delivered:</strong> Content goes in &rarr; verified against approved brand guidelines and factual truth specs &rarr; issues returned explained with verbatim rule citations and 3 intent-preserving rewrites &rarr; human reviewer decides and issues a cryptographically signed compliance certificate (SHA-256).
     </div>
 
     <div class="section-title">
@@ -236,7 +236,7 @@ html_content = """<!DOCTYPE html>
     <ul>
       <li><strong>Frontend Architecture:</strong> Next.js 15 (React 19, TypeScript), Tailwind CSS, Lucide React, and Canvas Confetti for celebratory sign-offs.</li>
       <li><strong>Multimodal Verification Engine:</strong> Direct integration with Google Gemini 3.8 / 3.7 Flash models for deep contextual reasoning, supplemented with a deterministic rule engine to ensure 100% uptime for judges under all network conditions.</li>
-      <li><strong>Mathematical Computer Vision:</strong> WCAG 2.1 relative luminance algorithm ($L = 0.2126R + 0.7152G + 0.0722B$) calculating color contrast ratios ($[L_1 + 0.05] / [L_2 + 0.05]$) with real-time AA/AAA validation.</li>
+      <li><strong>Mathematical Computer Vision:</strong> WCAG 2.1 relative luminance algorithm (L = 0.2126R + 0.7152G + 0.0722B) calculating color contrast ratios ((L₁ + 0.05) / (L₂ + 0.05)) with real-time AA/AAA validation.</li>
       <li><strong>Cryptographic Verification:</strong> Node.js `crypto` generating SHA-256 digests over content, policy versions, and timestamps.</li>
     </ul>
 
