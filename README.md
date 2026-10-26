@@ -5,8 +5,10 @@
 ---
 
 ## 🚀 Live Demo & Interactive Judge Playground
+* **Live Interactive Web App (Vercel)**: Deployed on Vercel *(Open to anyone without login or sign-in barrier)*
 * **GitHub Repository**: [https://github.com/Arkz-Deepak/arkz-aegisbrand](https://github.com/Arkz-Deepak/arkz-aegisbrand)
-* **Round 1 Specification**: [`docs/Inkloom_AI_Round_1_Plan_AegisBrand.pdf`](docs/Inkloom_AI_Round_1_Plan_AegisBrand.pdf)
+* **Round 2 Build Technical Report**: [`docs/Inkloom_AI_Round_2_Build_AegisBrand.pdf`](docs/Inkloom_AI_Round_2_Build_AegisBrand.pdf)
+* **Round 1 Architectural Blueprint**: [`docs/Inkloom_AI_Round_1_Plan_AegisBrand.pdf`](docs/Inkloom_AI_Round_1_Plan_AegisBrand.pdf)
 
 ---
 
