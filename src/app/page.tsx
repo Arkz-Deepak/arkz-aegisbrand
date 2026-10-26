@@ -211,6 +211,26 @@ export default function AegisBrandApp() {
   const [contrastColor2, setContrastColor2] = useState<string>('#0F172A');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showJudgeTour, setShowJudgeTour] = useState<boolean>(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+  function showToast(message: string, type: 'success' | 'info' | 'warning' = 'success') {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((curr) => (curr?.message === message ? null : curr));
+    }, 2800);
+  }
+
+  // Keyboard shortcut listener: Cmd/Ctrl + Enter to trigger inspection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleRunInspection();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [content, channel, guidelines, apiKey, preferredModel]);
 
   // Run inspection on initial mount
   useEffect(() => {
@@ -249,6 +269,7 @@ export default function AegisBrandApp() {
     setChannel(newChannel);
     const newContent = channelTemplates.channels[newChannel]?.[variant] || '';
     setContent(newContent);
+    showToast(`Loaded ${variant === 'flawed' ? 'flawed benchmark' : 'compliant baseline'} for ${newChannel}`);
     handleRunInspection(newContent, newChannel);
   }
 
@@ -290,6 +311,7 @@ export default function AegisBrandApp() {
     if (!content.includes(issue.flaggedExcerpt)) return;
     const updated = content.replace(issue.flaggedExcerpt, option.text);
     setContent(updated);
+    showToast(`✨ Replaced: "${issue.flaggedExcerpt.substring(0, 20)}..." → "${option.text.substring(0, 30)}..."`);
     handleRunInspection(updated, channel);
   }
 
@@ -310,6 +332,7 @@ export default function AegisBrandApp() {
         const cert: ComplianceCertificate = await res.json();
         setCertificate(cert);
         setLedger((prev) => [cert, ...prev]);
+        showToast(`🛡️ Certificate ${cert.certificateId} signed & sealed!`);
 
         confetti({
           particleCount: 90,
@@ -325,6 +348,7 @@ export default function AegisBrandApp() {
   function copyToClipboard(text: string, id: string) {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+    showToast('📋 Copied to clipboard!');
     setTimeout(() => setCopiedId(null), 2000);
   }
 
@@ -337,6 +361,7 @@ export default function AegisBrandApp() {
     a.download = `AegisBrand-Compliance-Certificate-${cert.certificateId}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    showToast(`📥 Certificate JSON downloaded (${cert.certificateId})`);
   }
 
   const currentContrast = calculateWcagContrast(contrastColor1, contrastColor2);
@@ -794,6 +819,39 @@ export default function AegisBrandApp() {
                     >
                       Sample Visual Banner Preview (Ratio {currentContrast}:1)
                     </div>
+
+                    {/* QUICK CONTRAST PRESETS */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className={`text-[10px] font-semibold uppercase ${textMuted}`}>Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => { setContrastColor1('#FFFFFF'); setContrastColor2('#0F172A'); showToast('Loaded AAA Dark Slate Preset (17.8:1)'); }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition ${innerClass}`}
+                      >
+                        AAA Slate (17.8:1)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setContrastColor1('#FFFFFF'); setContrastColor2('#1E40AF'); showToast('Loaded AAA Brand Blue Preset (8.6:1)'); }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition ${innerClass}`}
+                      >
+                        AAA Blue (8.6:1)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setContrastColor1('#FFFFFF'); setContrastColor2('#475569'); showToast('Loaded AA Minimal Preset (4.7:1)'); }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition ${innerClass}`}
+                      >
+                        AA Minimal (4.7:1)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setContrastColor1('#CBD5E1'); setContrastColor2('#FFFFFF'); showToast('Loaded Fail Warning Preset (1.4:1)', 'warning'); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-500 bg-rose-500/10 transition"
+                      >
+                        Fail Test (1.4:1)
+                      </button>
+                    </div>
                   </div>
 
                   {/* RUN INSPECTION BUTTON */}
@@ -810,7 +868,10 @@ export default function AegisBrandApp() {
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4" />
-                        Run Pre-Flight Inspection
+                        <span>Run Pre-Flight Inspection</span>
+                        <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/20 text-white/90">
+                          ⌘ + ↵
+                        </kbd>
                       </>
                     )}
                   </button>
@@ -819,6 +880,34 @@ export default function AegisBrandApp() {
 
               {/* RIGHT COLUMN: DIAGNOSTIC & VERIFICATION HUB (7 COLS) */}
               <div className="lg:col-span-7 space-y-4">
+                {/* ACTIVE SCANNING PROGRESS RADAR */}
+                {isInspecting && (
+                  <div className={`p-4 rounded-xl border animate-pulse space-y-2.5 ${
+                    isDark ? 'bg-indigo-950/30 border-indigo-500/40 text-indigo-200' : 'bg-indigo-50/80 border-indigo-300 text-indigo-900'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+                        <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+                        <span>Pre-Flight Inspection Running...</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold uppercase">
+                        AI Reasoning Active
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-xs font-mono">
+                      <div className="flex items-center gap-2 text-emerald-400">
+                        <Check className="h-3 w-3 shrink-0" /> Ingested Knowledge Vault Rules (v{guidelines.version})
+                      </div>
+                      <div className="flex items-center gap-2 text-blue-400 animate-pulse">
+                        <Sparkles className="h-3 w-3 shrink-0" /> Auditing claims &amp; tone against {preferredModel}...
+                      </div>
+                      <div className="flex items-center gap-2 opacity-75">
+                        <SlidersHorizontal className="h-3 w-3 shrink-0" /> Validating WCAG 2.1 relative luminance ({currentContrast}:1)
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* ACTIVE ENGINE TELEMETRY BADGE */}
                 {report && (
                   <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs ${
@@ -1619,6 +1708,22 @@ export default function AegisBrandApp() {
           Multimodal Pre-Publication Brand Governance • Powered by Google Gemini &amp; Mathematical Vision
         </p>
       </footer>
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+          <div className={`px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-semibold flex items-center gap-2.5 backdrop-blur ${
+            toast.type === 'warning'
+              ? 'bg-amber-950/90 text-amber-200 border-amber-800/80 shadow-amber-950/40'
+              : isDark
+              ? 'bg-slate-900/95 text-slate-100 border-slate-700 shadow-blue-500/10'
+              : 'bg-white/95 text-slate-900 border-slate-200 shadow-slate-300'
+          }`}>
+            <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
