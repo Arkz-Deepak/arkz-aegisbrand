@@ -41,6 +41,8 @@
       "approvedStatement": "CloudScale guarantees 99.95% availability backed by financial service credits under Enterprise Master Agreement Section 4.2.",
       "bannedVariations": [
         "100% uptime guaranteed",
+        "100% uninterrupted uptime",
+        "100% uptime",
         "99.999% uptime with zero exceptions",
         "never goes down"
       ],

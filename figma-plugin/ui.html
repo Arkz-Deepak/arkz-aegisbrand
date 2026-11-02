@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AegisBrand AI - Figma Governance</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --border: #334155;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); font-size: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 100vh; }
+    header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    .brand { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--text); }
+    .brand-icon { width: 16px; height: 16px; color: var(--primary); }
+    .badge { background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    
+    .panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
+    .node-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+    
+    .selection-preview { background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; max-height: 85px; overflow-y: auto; white-space: pre-wrap; line-height: 1.4; color: #cbd5e1; }
+    
+    .row { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+    select, input { background: #090d16; border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 11px; width: 100%; outline: none; }
+    select:focus, input:focus { border-color: var(--primary); }
+    
+    button { background: var(--primary); color: #fff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; transition: 0.15s ease; }
+    button:hover { background: var(--primary-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.btn-success { background: var(--success); }
+    button.btn-secondary { background: #334155; }
+    button.btn-secondary:hover { background: #475569; }
+    
+    .score-meter { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .score-meter.warn { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+    .score-meter.danger { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+    .score-val { font-size: 20px; font-weight: 800; font-family: monospace; }
+    
+    .issues-list { display: flex; flex-direction: column; gap: 8px; max-height: 230px; overflow-y: auto; }
+    .issue-card { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-left: 3px solid var(--danger); border-radius: 6px; padding: 8px; }
+    .issue-card.warn { border-left-color: var(--warning); }
+    .issue-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+    .issue-cite { color: var(--text-muted); font-size: 9px; }
+    .issue-excerpt { background: rgba(239, 68, 68, 0.15); color: #fca5a5; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 10px; display: inline-block; margin-bottom: 4px; }
+    .issue-expl { font-size: 10.5px; color: #cbd5e1; margin-bottom: 6px; line-height: 1.35; }
+    
+    .rewrite-btn { background: #1e293b; border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd; padding: 5px 8px; border-radius: 4px; font-size: 10px; text-align: left; width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+    .rewrite-btn:hover { background: rgba(59, 130, 246, 0.2); border-color: var(--primary); color: #fff; }
+    
+    .empty-state { text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 11px; }
+    .status-bar { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      <span>AegisBrand AI</span>
+    </div>
+    <span class="badge">Figma V2.4</span>
+  </header>
+
+  <!-- CURRENT SELECTION PANEL -->
+  <div class="panel">
+    <div class="panel-header">
+      <span>Active Selection:</span>
+      <span id="layerInfo" class="node-title">No layer selected</span>
+    </div>
+    <div id="selectionPreview" class="selection-preview">Select any text layer or ad banner frame in Figma to inspect.</div>
+    <div class="row">
+      <select id="channelSelect">
+        <option value="Paid Digital Ad">📢 Paid Digital Ad</option>
+        <option value="Social Media Copy">💬 Social Media Copy</option>
+        <option value="Press Release">📰 Press Release</option>
+        <option value="Blog Post">✍️ Blog Post</option>
+      </select>
+      <button id="inspectBtn" style="width: 140px;">Lint Layer</button>
+    </div>
+  </div>
+
+  <!-- INSPECTION RESULTS CONTAINER -->
+  <div id="resultsContainer" style="display: none; flex: 1; display: flex; flex-direction: column;">
+    <div id="scoreMeter" class="score-meter">
+      <div>
+        <div style="font-size: 11px; font-weight: 600;">Brand Compliance Score</div>
+        <div id="statusText" style="font-size: 10px; color: var(--text-muted);">Verified against CloudScale Guidelines</div>
+      </div>
+      <div id="scoreVal" class="score-val">--%</div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <span style="font-weight: 700; font-size: 11px;">Identified Issues (<span id="issueCount">0</span>)</span>
+      <button id="applyAllBtn" class="btn-success" style="width: auto; padding: 4px 8px; font-size: 10px; display: none;">Apply All to Canvas</button>
+    </div>
+
+    <div id="issuesList" class="issues-list"></div>
+  </div>
+
+  <div id="emptyPrompt" class="empty-state">
+    Click <strong>"Lint Layer"</strong> to verify text against enterprise SLA terms, forbidden jargon, and brand voice.
+  </div>
+
+  <div class="status-bar">
+    <span>Endpoint: <strong>AegisBrand Engine</strong></span>
+    <span id="apiStatus" style="color: #10b981;">● Connected</span>
+  </div>
+
+  <script>
+    let currentText = '';
+    let currentIssues = [];
+    let endpointUrl = 'https://arkz-aegisbrand.vercel.app/api/verify';
+
+    // Local deterministic fallback rules for offline or direct mode
+    const FALLBACK_RULES = [
+      { term: 'cheapest', rep: 'cost-optimized high ROI', cite: 'Brand Terminology §3.2', expl: 'Brand positioning forbids low-cost commodity claims.' },
+      { term: 'unlimited 5g internet', rep: 'high-speed enterprise connectivity', cite: 'Factual Accuracy §2.1', expl: 'False capability; CloudScale is not an ISP.' },
+      { term: 'unlimited 5g', rep: 'enterprise connectivity', cite: 'Factual Accuracy §2.1', expl: 'False capability claim.' },
+      { term: 'unlimited gpu', rep: 'scalable GPU compute clusters', cite: 'Infrastructure Policy §4.0', expl: 'Violates fair-use capacity limits.' },
+      { term: 'bulletproof', rep: 'enterprise-hardened', cite: 'Tone Standards §1.4', expl: 'Unsubstantiated superlative.' },
+      { term: '#1 rated', rep: 'industry-recognized', cite: 'Advertising §1.1', expl: 'Unsubstantiated market claim.' },
+      { term: '100% uptime', rep: 'financially-backed 99.95% enterprise SLA', cite: 'Master SLA Contract §4.2', expl: 'Official CloudScale SLA is 99.95%.' },
+      { term: 'zero throttling', rep: 'predictable low-latency QoS', cite: 'Infrastructure §4.1', expl: 'QoS traffic shaping is active.' }
+    ];
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'SELECTION_LOADED') {
+        currentText = msg.characters;
+        document.getElementById('layerInfo').textContent = `${msg.nodeName} (${msg.textCount} text node${msg.textCount > 1 ? 's' : ''})`;
+        document.getElementById('selectionPreview').textContent = currentText;
+        document.getElementById('inspectBtn').disabled = false;
+      } else if (msg.type === 'SELECTION_EMPTY' || msg.type === 'NO_TEXT_FOUND') {
+        currentText = '';
+        document.getElementById('layerInfo').textContent = 'No text selection';
+        document.getElementById('selectionPreview').textContent = msg.message;
+        document.getElementById('inspectBtn').disabled = true;
+      }
+    };
+
+    document.getElementById('inspectBtn').addEventListener('click', async () => {
+      if (!currentText.trim()) return;
+
+      const btn = document.getElementById('inspectBtn');
+      btn.disabled = true;
+      btn.textContent = 'Inspecting...';
+
+      const channel = document.getElementById('channelSelect').value;
+      let data = null;
+
+      try {
+        const res = await fetch(endpointUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: currentText, channel })
+        });
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (err) {
+        console.warn('Network call to remote API failed, falling back to local linter engine:', err);
+      }
+
+      // If remote failed or returned no issues, run built-in deterministic check
+      if (!data || !data.issues) {
+        const issues = [];
+        const lower = currentText.toLowerCase();
+        FALLBACK_RULES.forEach((r, idx) => {
+          const pos = lower.indexOf(r.term);
+          if (pos !== -1) {
+            const matched = currentText.substring(pos, pos + r.term.length);
+            issues.push({
+              id: 'figma-issue-' + idx,
+              type: r.term.includes('uptime') || r.term.includes('5g') ? 'CRITICAL_CLAIM' : 'TERMINOLOGY',
+              flaggedExcerpt: matched,
+              ruleCitation: r.cite,
+              explanation: r.expl,
+              suggestions: [
+                { style: 'Balanced', text: r.rep, rationale: 'Standard compliant phrasing.' }
+              ]
+            });
+          }
+        });
+
+        const overall = issues.length === 0 ? 100 : Math.max(35, 100 - (issues.length * 20));
+        data = {
+          overallScore: overall,
+          issues: issues,
+          status: issues.length === 0 ? 'APPROVED' : 'CHANGES_REQUESTED'
+        };
+      }
+
+      renderResults(data);
+      btn.disabled = false;
+      btn.textContent = 'Lint Layer';
+    });
+
+    function renderResults(data) {
+      document.getElementById('emptyPrompt').style.display = 'none';
+      const container = document.getElementById('resultsContainer');
+      container.style.display = 'flex';
+
+      const scoreVal = document.getElementById('scoreVal');
+      const scoreMeter = document.getElementById('scoreMeter');
+      scoreVal.textContent = data.overallScore + '%';
+
+      scoreMeter.className = 'score-meter';
+      if (data.overallScore >= 90) {
+        // success green
+      } else if (data.overallScore >= 60) {
+        scoreMeter.classList.add('warn');
+      } else {
+        scoreMeter.classList.add('danger');
+      }
+
+      currentIssues = data.issues || [];
+      document.getElementById('issueCount').textContent = currentIssues.length;
+
+      const applyAllBtn = document.getElementById('applyAllBtn');
+      if (currentIssues.length > 0) {
+        applyAllBtn.style.display = 'block';
+      } else {
+        applyAllBtn.style.display = 'none';
+      }
+
+      const list = document.getElementById('issuesList');
+      list.innerHTML = '';
+
+      if (currentIssues.length === 0) {
+        list.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: #10b981;">
+            <div style="font-size: 24px; margin-bottom: 4px;">🎉</div>
+            <div style="font-weight: 700;">100% Brand Compliant!</div>
+            <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Zero prohibited terms or ungrounded SLA claims detected in selected layer.</div>
+          </div>
+        `;
+        return;
+      }
+
+      currentIssues.forEach((issue) => {
+        const card = document.createElement('div');
+        card.className = 'issue-card' + (issue.type === 'TONE_DRIFT' ? ' warn' : '');
+
+        const suggestion = issue.suggestions?.[0]?.text || 'Approved replacement';
+        card.innerHTML = `
+          <div class="issue-header">
+            <span>${issue.type.replace('_', ' ')}</span>
+            <span class="issue-cite">${issue.ruleCitation}</span>
+          </div>
+          <div><span class="issue-excerpt">"${issue.flaggedExcerpt}"</span></div>
+          <div class="issue-expl">${issue.explanation}</div>
+          <button class="rewrite-btn" data-original="${escapeHtml(issue.flaggedExcerpt)}" data-rep="${escapeHtml(suggestion)}">
+            <span>✨ Replace with: <strong>"${escapeHtml(suggestion)}"</strong></span>
+            <span>Apply ➔</span>
+          </button>
+        `;
+
+        card.querySelector('.rewrite-btn').addEventListener('click', (e) => {
+          const orig = e.currentTarget.getAttribute('data-original');
+          const rep = e.currentTarget.getAttribute('data-rep');
+          parent.postMessage({ pluginMessage: { type: 'APPLY_REWRITE', originalText: orig, replacementText: rep } }, '*');
+        });
+
+        list.appendChild(card);
+      });
+    }
+
+    document.getElementById('applyAllBtn').addEventListener('click', () => {
+      const replacements = currentIssues.map((iss) => ({
+        original: iss.flaggedExcerpt,
+        replacement: iss.suggestions?.[0]?.text || ''
+      })).filter((r) => r.replacement);
+
+      parent.postMessage({ pluginMessage: { type: 'APPLY_ALL_REWRITES', replacements } }, '*');
+    });
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

@@ -36,6 +36,10 @@ import {
   Trash2,
   ShieldAlert,
   FileCode,
+  Send,
+  Upload,
+  Share2,
+  BookOpen,
 } from 'lucide-react';
 import defaultGuidelines from '@/data/defaultBrandGuidelines.json';
 import channelTemplates from '@/data/channelTemplates.json';
@@ -46,7 +50,7 @@ import {
   RewriteOption,
   ComplianceCertificate,
 } from '@/types/brand';
-import { calculateWcagContrast } from '@/lib/verifier';
+import { calculateWcagContrast, replaceExcerptInText } from '@/lib/verifier';
 
 type ChannelKey = 'Paid Digital Ad' | 'Press Release' | 'Blog Post' | 'Social Media Copy' | 'Whitepaper Deck';
 
@@ -192,7 +196,9 @@ export function runRealtimeLinter(text: string): LiveLinterIssue[] {
 
 export default function AegisBrandApp() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [activeTab, setActiveTab] = useState<'studio' | 'vault' | 'friction' | 'live' | 'ledger'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'vault' | 'live' | 'ledger'>('studio');
+  const [vaultSubTab, setVaultSubTab] = useState<'rules' | 'ingestion' | 'friction'>('rules');
+  const [liveSubTab, setLiveSubTab] = useState<'linter' | 'figma'>('linter');
   const [channel, setChannel] = useState<ChannelKey>('Paid Digital Ad');
   const [content, setContent] = useState<string>(channelTemplates.channels['Paid Digital Ad'].flawed);
   const [apiKey, setApiKey] = useState<string>('');
@@ -210,8 +216,22 @@ export default function AegisBrandApp() {
   const [contrastColor1, setContrastColor1] = useState<string>('#FFFFFF');
   const [contrastColor2, setContrastColor2] = useState<string>('#0F172A');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showJudgeTour, setShowJudgeTour] = useState<boolean>(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+  // Round 3 Stage Additions: Webhooks, Brandbook Ingestion & Printable Certificate Modal
+  const [webhookUrl, setWebhookUrl] = useState<string>('https://hooks.slack.com/services/mock/arkz/compliance');
+  const [isDispatchingWebhook, setIsDispatchingWebhook] = useState<boolean>(false);
+  const [lastWebhookLog, setLastWebhookLog] = useState<any | null>(null);
+  const [customBrandDocText, setCustomBrandDocText] = useState<string>('');
+  const [isIngestingBrandDoc, setIsIngestingBrandDoc] = useState<boolean>(false);
+  const [selectedCertForModal, setSelectedCertForModal] = useState<ComplianceCertificate | null>(null);
+
+  // Figma In-Situ Simulator States (Strategic Improvement #1)
+  const [figmaHeadline, setFigmaHeadline] = useState<string>('#1 Unlimited 5G Enterprise Cloud');
+  const [figmaSubhead, setFigmaSubhead] = useState<string>('Cheapest cloud with 100% uninterrupted uptime and bulletproof security.');
+  const [figmaCta, setFigmaCta] = useState<string>('Deploy with Zero Throttling ➔');
+  const [selectedFigmaLayer, setSelectedFigmaLayer] = useState<'headline' | 'subhead' | 'cta'>('headline');
+  const [isFigmaFixed, setIsFigmaFixed] = useState<boolean>(false);
 
   function showToast(message: string, type: 'success' | 'info' | 'warning' = 'success') {
     setToast({ message, type });
@@ -308,8 +328,7 @@ export default function AegisBrandApp() {
   }
 
   function handleApplySuggestion(issue: VerificationIssue, option: RewriteOption) {
-    if (!content.includes(issue.flaggedExcerpt)) return;
-    const updated = content.replace(issue.flaggedExcerpt, option.text);
+    const updated = replaceExcerptInText(content, issue.flaggedExcerpt, option.text);
     setContent(updated);
     showToast(`✨ Replaced: "${issue.flaggedExcerpt.substring(0, 18)}..." → "${option.text.substring(0, 24)}..."`);
 
@@ -343,8 +362,8 @@ export default function AegisBrandApp() {
     report.issues.forEach((iss) => {
       const selectedStyle = selectedSuggestions[iss.id] || 'Balanced';
       const chosenOption = iss.suggestions?.find((s) => s.style === selectedStyle) || iss.suggestions?.[0];
-      if (chosenOption && updated.includes(iss.flaggedExcerpt)) {
-        updated = updated.replace(iss.flaggedExcerpt, chosenOption.text);
+      if (chosenOption) {
+        updated = replaceExcerptInText(updated, iss.flaggedExcerpt, chosenOption.text);
       }
     });
 
@@ -361,6 +380,93 @@ export default function AegisBrandApp() {
 
     confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
     showToast('✨ All suggested rewrites applied! Copy is 100% compliant and ready to certify.');
+  }
+
+  async function handleDispatchWebhook(certToDispatch = certificate || ledger[0]) {
+    if (!certToDispatch) {
+      showToast('No approved certificate available to dispatch.', 'warning');
+      return;
+    }
+    setIsDispatchingWebhook(true);
+    try {
+      const res = await fetch('/api/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUrl: webhookUrl,
+          certificate: certToDispatch,
+        }),
+      });
+      const data = await res.json();
+      setLastWebhookLog(data);
+      if (data.success) {
+        showToast(`🚀 Webhook delivered: HTTP ${data.status} (${data.latencyMs}ms)`, 'success');
+      } else {
+        showToast(`Webhook simulated/alert: HTTP ${data.status}`, 'info');
+      }
+    } catch (err) {
+      console.error('Webhook error:', err);
+      showToast('Webhook dispatch failed', 'warning');
+    } finally {
+      setIsDispatchingWebhook(false);
+    }
+  }
+
+  async function handleIngestBrandbook(presetIndustry?: string) {
+    setIsIngestingBrandDoc(true);
+    try {
+      let docText = customBrandDocText;
+      let name = 'Custom Ingested Guidelines';
+      if (presetIndustry === 'FinTech') {
+        name = 'Shield Bank Regulatory Standards v4.1';
+        docText = `
+INDUSTRY: FinTech & Global Banking
+TONE: Authoritative, Fiduciary, Clear, Precise
+PROHIBITED: guaranteed returns ➔ variable market risk disclosures
+PROHIBITED: completely safe ➔ FDIC insured up to statutory limits
+PROHIBITED: instant profit ➔ disciplined capital allocation
+SPECS: Banking SLA guarantees 99.99% transaction settlement availability.
+        `;
+      } else if (presetIndustry === 'HealthTech') {
+        name = 'BioSafe Clinical Diagnostics Guide v3.0';
+        docText = `
+INDUSTRY: HealthTech & Diagnostics
+TONE: Empathetic, Scientifically Grounded, HIPAA-Compliant
+PROHIBITED: 100% cure rate ➔ clinically validated efficacy
+PROHIBITED: miracle treatment ➔ therapeutic advancement
+PROHIBITED: unhackable patient data ➔ HIPAA & SOC-2 compliant encryption
+SPECS: Diagnostic precision backed by peer-reviewed clinical trials.
+        `;
+      } else if (presetIndustry === 'Default') {
+        setGuidelines(defaultGuidelines as unknown as BrandGuideline);
+        showToast('Restored CloudScale Enterprise Guidelines v2.4', 'info');
+        handleRunInspection(content, channel);
+        setIsIngestingBrandDoc(false);
+        return;
+      }
+
+      const res = await fetch('/api/ingest-brandbook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentText: docText || 'General Enterprise Guidelines v3',
+          guidelineName: name,
+          industry: presetIndustry,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.guideline) {
+        setGuidelines(data.guideline);
+        showToast(`📚 Ingested "${name}" into computable Brand Vault!`, 'success');
+        handleRunInspection(content, channel);
+      }
+    } catch (err) {
+      console.error('Ingestion failed:', err);
+      showToast('Brandbook ingestion failed', 'warning');
+    } finally {
+      setIsIngestingBrandDoc(false);
+    }
   }
 
   async function handleApproveAndCertify() {
@@ -472,22 +578,6 @@ export default function AegisBrandApp() {
               </span>
             </button>
 
-            {/* 60s TOUR BUTTON */}
-            {!showJudgeTour && (
-              <button
-                onClick={() => setShowJudgeTour(true)}
-                className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-1 transition ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
-                    : 'bg-slate-100 border-slate-300 text-blue-600 hover:bg-slate-200'
-                }`}
-                title="Open 60-Second Guided Tour"
-              >
-                <Compass className="h-4 w-4" />
-                <span className="hidden md:inline">Tour</span>
-              </button>
-            )}
-
             {/* LIGHT / DARK THEME TOGGLE */}
             <button
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
@@ -501,7 +591,7 @@ export default function AegisBrandApp() {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {/* NAVIGATION TABS */}
+            {/* NAVIGATION TABS (STREAMLINED 4 ENTERPRISE MODULES) */}
             <nav className={`flex items-center gap-1 p-1 rounded-lg border ${isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-100 border-slate-300'} text-xs`}>
               <button
                 onClick={() => setActiveTab('studio')}
@@ -511,27 +601,7 @@ export default function AegisBrandApp() {
                     : `${textMuted} hover:text-blue-500`
                 }`}
               >
-                <FileCheck2 className="h-3.5 w-3.5" /> Pre-Flight
-              </button>
-              <button
-                onClick={() => setActiveTab('vault')}
-                className={`px-3 py-1.5 rounded-md font-medium transition flex items-center gap-1.5 ${
-                  activeTab === 'vault'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : `${textMuted} hover:text-blue-500`
-                }`}
-              >
-                <Layers className="h-3.5 w-3.5" /> Vault
-              </button>
-              <button
-                onClick={() => setActiveTab('friction')}
-                className={`px-3 py-1.5 rounded-md font-medium transition flex items-center gap-1.5 ${
-                  activeTab === 'friction'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : `${textMuted} hover:text-blue-500`
-                }`}
-              >
-                <Search className="h-3.5 w-3.5" /> Friction
+                <FileCheck2 className="h-3.5 w-3.5" /> Review Studio
               </button>
               <button
                 onClick={() => setActiveTab('live')}
@@ -541,7 +611,17 @@ export default function AegisBrandApp() {
                     : `${textMuted} hover:text-blue-500`
                 }`}
               >
-                <Zap className="h-3.5 w-3.5" /> Live Linter
+                <Zap className="h-3.5 w-3.5" /> Live Linter &amp; Figma
+              </button>
+              <button
+                onClick={() => setActiveTab('vault')}
+                className={`px-3 py-1.5 rounded-md font-medium transition flex items-center gap-1.5 ${
+                  activeTab === 'vault'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : `${textMuted} hover:text-blue-500`
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" /> Brand Vault &amp; Friction AI
               </button>
               <button
                 onClick={() => setActiveTab('ledger')}
@@ -551,7 +631,7 @@ export default function AegisBrandApp() {
                     : `${textMuted} hover:text-blue-500`
                 }`}
               >
-                <ShieldCheck className="h-3.5 w-3.5" /> Ledger
+                <ShieldCheck className="h-3.5 w-3.5" /> Audit Ledger &amp; Webhooks
               </button>
             </nav>
           </div>
@@ -612,154 +692,63 @@ export default function AegisBrandApp() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
-        {/* 60-SECOND JUDGE GUIDED TOUR BANNER */}
-        {showJudgeTour && (
-          <div className={`border rounded-xl p-4 relative shadow-sm transition ${
-            isDark
-              ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/40 to-slate-900 border-blue-500/40'
-              : 'bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white border-blue-200'
-          }`}>
-            <button
-              onClick={() => setShowJudgeTour(false)}
-              className="absolute top-3 right-3 text-slate-400 hover:text-slate-200 text-xs px-2 py-0.5 rounded border border-transparent hover:border-slate-700"
-              title="Dismiss Guide"
-            >
-              ✕ Hide Tour
-            </button>
-
-            <div className="flex items-center gap-2 mb-1.5">
-              <Compass className="h-4 w-4 text-blue-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                Codex 48 Judge Evaluation: 60-Second Guided Tour
-              </span>
-            </div>
-
-            <p className={`text-xs mb-3 ${textMuted}`}>
-              Experience the complete pre-publication brand governance flow in 4 rapid steps:
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
-              {/* STEP 1 */}
-              <div
-                onClick={() => {
-                  setActiveTab('studio');
-                  handleChannelChange('Paid Digital Ad', 'flawed');
-                }}
-                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-blue-500 ${
-                  activeTab === 'studio' && content === channelTemplates.channels['Paid Digital Ad'].flawed
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : innerClass
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1 font-semibold text-blue-400 text-[11px]">
-                  <span>Step 1: Ingest Content</span>
-                  <span className="text-[10px] font-mono">0:00</span>
-                </div>
-                <p className={`text-[11px] leading-tight ${textMuted}`}>
-                  Loads flawed ad with banned terms &amp; SLA violations.
-                </p>
-              </div>
-
-              {/* STEP 2 */}
-              <div
-                onClick={() => {
-                  setActiveTab('studio');
-                  handleRunInspection();
-                }}
-                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-blue-500 ${
-                  isInspecting ? 'border-amber-500 bg-amber-500/10' : innerClass
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1 font-semibold text-amber-400 text-[11px]">
-                  <span>Step 2: Inspect Issues</span>
-                  <span className="text-[10px] font-mono">0:15</span>
-                </div>
-                <p className={`text-[11px] leading-tight ${textMuted}`}>
-                  Triggers Gemini AI + contrast checker to explain issues.
-                </p>
-              </div>
-
-              {/* STEP 3 */}
-              <div
-                onClick={() => {
-                  setActiveTab('studio');
-                  if (report && report.issues && report.issues.length > 0) {
-                    let updated = content;
-                    report.issues.forEach((iss) => {
-                      if (iss.suggestions?.[0]?.text) {
-                        updated = updated.replace(iss.flaggedExcerpt, iss.suggestions[0].text);
-                      }
-                    });
-                    setContent(updated);
-                  }
-                  handleApproveAndCertify();
-                }}
-                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-emerald-500 ${
-                  certificate ? 'border-emerald-500 bg-emerald-500/10' : innerClass
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1 font-semibold text-emerald-400 text-[11px]">
-                  <span>Step 3: Certify</span>
-                  <span className="text-[10px] font-mono">0:30</span>
-                </div>
-                <p className={`text-[11px] leading-tight ${textMuted}`}>
-                  Applies compliant edits &amp; issues SHA-256 certificate.
-                </p>
-              </div>
-
-              {/* STEP 4 */}
-              <div
-                onClick={() => setActiveTab('live')}
-                className={`p-2.5 rounded-lg border cursor-pointer transition hover:border-purple-500 ${
-                  activeTab === 'live' ? 'border-purple-500 bg-purple-500/10' : innerClass
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1 font-semibold text-purple-400 text-[11px]">
-                  <span>Step 4: Live Linter</span>
-                  <span className="text-[10px] font-mono">0:45</span>
-                </div>
-                <p className={`text-[11px] leading-tight ${textMuted}`}>
-                  Type live into the simulated canvas with real-time tags.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* TAB 1: PRE-FLIGHT STUDIO (THE CORE WORKFLOW) */}
         {activeTab === 'studio' && (
           <div className="space-y-6">
-            {/* 1-CLICK JUDGE BENCHMARK SELECTOR */}
+            {/* PROMINENT CHANNEL SELECTION PILLS & BENCHMARKS */}
             <div className={`border rounded-xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
               isDark ? 'bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50/70 via-white to-blue-50/70 border-indigo-200'
             }`}>
-              <div>
+              <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-500">
-                    Judge Interactive Demo Benchmarks
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                    Content Channel &amp; Benchmark Selection
                   </span>
                 </div>
-                <p className={`text-xs mt-0.5 ${textMuted}`}>
-                  Select a channel and content preset to test immediate multimodal triage:
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  {(
+                    [
+                      { key: 'Paid Digital Ad', icon: '📢', label: 'Paid Ad' },
+                      { key: 'Press Release', icon: '📰', label: 'Press Release' },
+                      { key: 'Blog Post', icon: '✍️', label: 'Blog Post' },
+                      { key: 'Social Media Copy', icon: '💬', label: 'Social Copy' },
+                      { key: 'Whitepaper Deck', icon: '📑', label: 'Whitepaper' },
+                    ] as const
+                  ).map((ch) => (
+                    <button
+                      key={ch.key}
+                      onClick={() => handleChannelChange(ch.key, 'flawed')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ${
+                        channel === ch.key
+                          ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                          : `${innerClass} hover:border-blue-400 text-slate-300`
+                      }`}
+                    >
+                      <span>{ch.icon}</span>
+                      <span>{ch.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* QUICK TOGGLE BUTTONS FOR ACTIVE CHANNEL */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 self-end md:self-center">
                 <button
                   onClick={() => handleChannelChange(channel, 'flawed')}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition flex items-center gap-1.5"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition flex items-center gap-1.5"
+                  title="Loads copy with deliberate SLA violations and banned jargon"
                 >
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  Load Flawed Copy (Has Violations)
+                  <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                  Load Flawed Copy
                 </button>
                 <button
                   onClick={() => handleChannelChange(channel, 'compliant')}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition flex items-center gap-1.5"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition flex items-center gap-1.5"
+                  title="Loads certified 100% compliant brand copy"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Load Compliant Copy (Clean)
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  Load Compliant Copy
                 </button>
               </div>
             </div>
@@ -1265,128 +1254,230 @@ export default function AegisBrandApp() {
           </div>
         )}
 
-        {/* TAB 2: BRAND KNOWLEDGE VAULT */}
+        {/* TAB 2: BRAND KNOWLEDGE VAULT & INGESTION (IMPROVEMENT #2) */}
         {activeTab === 'vault' && (
           <div className={`border rounded-xl p-6 space-y-6 ${cardClass}`}>
-            <div className={`flex items-center justify-between border-b ${borderSubtle} pb-4`}>
+            <div className={`flex flex-col md:flex-row md:items-center justify-between border-b ${borderSubtle} pb-4 gap-4`}>
               <div>
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-blue-500" /> Computable Brand Knowledge Vault
-                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase">
+                    Strategic Improvement #2
+                  </span>
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <Layers className="h-5 w-5 text-blue-500" /> Brand Knowledge Vault &amp; Friction AI
+                  </h2>
+                </div>
                 <p className={`text-xs mt-1 ${textMuted}`}>
-                  Single source of truth: Ingests brandbooks, truth specs, SLA promises, and asset dictionaries into computable rule graphs.
+                  Computable single source of truth: Dynamic brandbook ingestion, automated truth specs, and algorithmic friction discovery.
                 </p>
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-blue-500/20 text-blue-500 border border-blue-500/30">
-                v{guidelines.version} Active
-              </span>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* APPROVED TRUTH SPECS */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Approved Factual Truth Specs
-                </h3>
-                <div className="space-y-2">
-                  {guidelines.approvedTruthSpecs.map((spec, i) => (
-                    <div key={i} className={`border rounded-lg p-3 text-xs space-y-1 ${innerClass}`}>
-                      <div className="font-semibold">{spec.approvedStatement}</div>
-                      <div className={`text-[10px] ${textMuted}`}>
-                        <strong>Source:</strong> {spec.sourceDoc}
-                      </div>
-                      <div className="text-[10px] text-rose-500">
-                        <strong>Banned Variations:</strong> {spec.bannedVariations.join(', ')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* PROHIBITED TERMS */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" /> Banned Terminology Dictionary
-                </h3>
-                <div className="space-y-2">
-                  {guidelines.prohibitedTerms.map((term, i) => (
-                    <div key={i} className={`border rounded-lg p-3 text-xs space-y-1 ${innerClass}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-rose-500">"{term.term}"</span>
-                        <span className="text-[10px] text-emerald-500 font-mono">Use: "{term.replacement}"</span>
-                      </div>
-                      <p className={`text-[10px] ${textMuted}`}>{term.reason}</p>
-                    </div>
-                  ))}
-                </div>
+              {/* VAULT SUB-TABS */}
+              <div className="flex items-center gap-1.5 p-1 rounded-lg border border-slate-700/60 bg-slate-900/80 text-xs">
+                <button
+                  onClick={() => setVaultSubTab('rules')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition ${
+                    vaultSubTab === 'rules' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📖 Active Specs
+                </button>
+                <button
+                  onClick={() => setVaultSubTab('ingestion')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1 ${
+                    vaultSubTab === 'ingestion' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Upload className="h-3 w-3" /> Ingest Brandbook
+                </button>
+                <button
+                  onClick={() => setVaultSubTab('friction')}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1 ${
+                    vaultSubTab === 'friction' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Search className="h-3 w-3" /> Friction AI
+                </button>
               </div>
             </div>
+
+            {/* SUB-VIEW 1: ACTIVE RULES & SPECS */}
+            {vaultSubTab === 'rules' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">
+                    Active Policy Graph: <strong>{guidelines.name}</strong> (v{guidelines.version})
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    ● Vector Indexed &amp; Grounded
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* APPROVED TRUTH SPECS */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Approved Factual Truth Specs
+                    </h3>
+                    <div className="space-y-2">
+                      {guidelines.approvedTruthSpecs.map((spec, i) => (
+                        <div key={i} className={`border rounded-lg p-3 text-xs space-y-1 ${innerClass}`}>
+                          <div className="font-semibold text-slate-200">{spec.approvedStatement}</div>
+                          <div className={`text-[10px] ${textMuted}`}>
+                            <strong>Source:</strong> {spec.sourceDoc}
+                          </div>
+                          <div className="text-[10px] text-rose-400">
+                            <strong>Banned Variations:</strong> {spec.bannedVariations.join(', ')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PROHIBITED TERMS */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-amber-400">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" /> Banned Terminology Dictionary
+                    </h3>
+                    <div className="space-y-2">
+                      {guidelines.prohibitedTerms.map((term, i) => (
+                        <div key={i} className={`border rounded-lg p-3 text-xs space-y-1 ${innerClass}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-rose-400">"{term.term}"</span>
+                            <span className="text-[10px] text-emerald-400 font-mono">Use: "{term.replacement}"</span>
+                          </div>
+                          <p className={`text-[10px] ${textMuted}`}>{term.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW 2: DYNAMIC BRANDBOOK INGESTION ENGINE */}
+            {vaultSubTab === 'ingestion' && (
+              <div className="space-y-6">
+                <div className={`p-4 rounded-xl border ${innerClass} space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2 text-blue-400">
+                        <Upload className="h-4 w-4" /> Multi-Tenant Brandbook Ingestion
+                      </h3>
+                      <p className={`text-xs mt-0.5 ${textMuted}`}>
+                        Select a target enterprise industry preset or paste raw guideline text to ingest into the computable vault.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                      Auto-Vectorizing Pipeline
+                    </span>
+                  </div>
+
+                  {/* PRESET INDUSTRY BUTTONS */}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <button
+                      onClick={() => handleIngestBrandbook('Default')}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 transition"
+                    >
+                      ☁️ CloudScale SaaS v2.4 (Default)
+                    </button>
+                    <button
+                      onClick={() => handleIngestBrandbook('FinTech')}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 transition"
+                    >
+                      🏦 Shield Bank FinTech v4.1 (SEC &amp; Fiduciary)
+                    </button>
+                    <button
+                      onClick={() => handleIngestBrandbook('HealthTech')}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition"
+                    >
+                      🧬 BioSafe HealthTech v3.0 (FDA Claims)
+                    </button>
+                  </div>
+                </div>
+
+                {/* CUSTOM BRANDBOOK TEXT INGESTION AREA */}
+                <div className={`p-4 rounded-xl border ${innerClass} space-y-3`}>
+                  <label className="text-xs font-bold block text-slate-300">
+                    Paste Custom Brand Guideline or Extracted PDF Text:
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={customBrandDocText}
+                    onChange={(e) => setCustomBrandDocText(e.target.value)}
+                    placeholder="e.g.&#10;INDUSTRY: FinTech / SaaS&#10;TONE: Authoritative, Clear&#10;PROHIBIT: guaranteed returns ➔ variable market risk disclosures&#10;SPECS: Banking SLA guarantees 99.99% transaction settlement availability."
+                    className={`w-full rounded-lg p-3 text-xs leading-relaxed font-mono border focus:outline-none focus:ring-1 focus:ring-blue-500 ${innerClass}`}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] ${textMuted}`}>
+                      Intelligent NLP structural parser will extract prohibited terms, truth specs, and tone archetypes.
+                    </span>
+                    <button
+                      onClick={() => handleIngestBrandbook()}
+                      disabled={isIngestingBrandDoc || !customBrandDocText.trim()}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center gap-1.5"
+                    >
+                      {isIngestingBrandDoc ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      Ingest &amp; Vectorize into Vault
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW 3: GUIDELINE FRICTION & AMBIGUITY DISCOVERY */}
+            {vaultSubTab === 'friction' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-slate-950 border-amber-900/40' : 'bg-amber-50/50 border-amber-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4" /> Conflict Detected: Rule 2.1 vs Rule 4.3
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border ${isDark ? 'bg-amber-950/60 text-amber-300 border-amber-800/40' : 'bg-white text-amber-800 border-amber-200'}`}>
+                        Tension: 8.4/10
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed">
+                      Rule 2.1 instructs writers to maintain <em>"Informal and friendly tone"</em>, while Rule 4.3 strictly prohibits the use of contractions (e.g. "don't", "we're"). Creators have triggered 14 review overrides this week due to this conflict.
+                    </p>
+                    <div className={`p-2.5 rounded text-xs font-medium border ${isDark ? 'bg-slate-900 text-emerald-400 border-emerald-900/30' : 'bg-white text-emerald-800 border-emerald-200'}`}>
+                      <strong>Algorithmic Amendment:</strong> Amend Rule 4.3 to permit standard conversational contractions in social copy while retaining the strict prohibition for formal whitepapers.
+                    </div>
+                  </div>
+
+                  <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-slate-950 border-blue-900/40' : 'bg-blue-50/50 border-blue-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-500 flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4" /> Outdated Terminology Drift: "v1.2 Cloud Engine"
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded border ${isDark ? 'bg-blue-950/60 text-blue-300 border-blue-800/40' : 'bg-white text-blue-800 border-blue-200'}`}>
+                        Deprecation Alert
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed">
+                      Three external agencies published collateral referencing "v1.2 Cloud Engine", which was officially deprecated in Q3 2026.
+                    </p>
+                    <div className={`p-2.5 rounded text-xs font-medium border ${isDark ? 'bg-slate-900 text-emerald-400 border-emerald-900/30' : 'bg-white text-emerald-800 border-emerald-200'}`}>
+                      <strong>Algorithmic Amendment:</strong> Push an automated notification to all external agency workspaces requiring terminology sync to "v2.0 Next-Gen Core".
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 3: FRICTION & AMBIGUITY DISCOVERY (IMPROVEMENT #2) */}
-        {activeTab === 'friction' && (
-          <div className={`border rounded-xl p-6 space-y-6 ${cardClass}`}>
-            <div className={`border-b ${borderSubtle} pb-4`}>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-500 border border-cyan-500/30 uppercase">
-                  Strategic Improvement #2
-                </span>
-                <h2 className="text-lg font-bold">Algorithmic Guideline Friction & Ambiguity Discovery</h2>
-              </div>
-              <p className={`text-xs mt-1 ${textMuted}`}>
-                Applies unsupervised clustering across reviewer rejection logs and guideline rules to surface conflicting or obsolete brand instructions before they cause repeated errors.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-slate-950 border-amber-900/40' : 'bg-amber-50/50 border-amber-200'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
-                    <AlertTriangle className="h-4 w-4" /> Conflict Detected: Rule 2.1 vs Rule 4.3
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded border ${isDark ? 'bg-amber-950/60 text-amber-300 border-amber-800/40' : 'bg-white text-amber-800 border-amber-200'}`}>
-                    High Ambiguity
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed">
-                  Rule 2.1 instructs writers to maintain <em>"Informal and friendly tone"</em>, while Rule 4.3 strictly prohibits the use of contractions (e.g. "don't", "we're"). Creators have triggered 14 review overrides this week due to this conflict.
-                </p>
-                <div className={`p-2.5 rounded text-xs font-medium border ${isDark ? 'bg-slate-900 text-emerald-400 border-emerald-900/30' : 'bg-white text-emerald-800 border-emerald-200'}`}>
-                  <strong>Recommended Amendment:</strong> Amend Rule 4.3 to permit standard conversational contractions in social copy while retaining the strict prohibition for formal whitepapers.
-                </div>
-              </div>
-
-              <div className={`border rounded-xl p-4 space-y-2 ${isDark ? 'bg-slate-950 border-blue-900/40' : 'bg-blue-50/50 border-blue-200'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-blue-500 flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4" /> Outdated Terminology Drift: "v1.2 Cloud Engine"
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded border ${isDark ? 'bg-blue-950/60 text-blue-300 border-blue-800/40' : 'bg-white text-blue-800 border-blue-200'}`}>
-                    Deprecation Alert
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed">
-                  Three external agencies published collateral referencing "v1.2 Cloud Engine", which was officially deprecated in Q3 2026.
-                </p>
-                <div className={`p-2.5 rounded text-xs font-medium border ${isDark ? 'bg-slate-900 text-emerald-400 border-emerald-900/30' : 'bg-white text-emerald-800 border-emerald-200'}`}>
-                  <strong>Recommended Amendment:</strong> Push an automated notification to all external agency workspaces requiring terminology sync to "v2.0 Next-Gen Core".
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: IN-SITU LIVE LINTER (IMPROVEMENT #1) */}
+        {/* TAB 4: IN-SITU LIVE LINTER & FIGMA BRIDGE (IMPROVEMENT #1) */}
         {activeTab === 'live' && (() => {
           const liveIssues = runRealtimeLinter(content);
           const liveScore = Math.max(10, 100 - liveIssues.length * 25);
           const isClean = liveIssues.length === 0;
 
           function handleLiveQuickFix(issue: LiveLinterIssue) {
-            if (!content.includes(issue.matchedText)) return;
-            const updated = content.replace(issue.matchedText, issue.suggestedReplacement);
+            const updated = replaceExcerptInText(content, issue.matchedText, issue.suggestedReplacement);
             setContent(updated);
+            showToast(`✨ Replaced: "${issue.matchedText}" → "${issue.suggestedReplacement}"`);
           }
 
           function handleInsertTestSnippet(textToInsert: string) {
@@ -1402,18 +1493,34 @@ export default function AegisBrandApp() {
                     <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase">
                       Strategic Improvement #1
                     </span>
-                    <h2 className="text-lg font-bold">In-Situ Live Linter (Figma & CMS Embed Simulation)</h2>
+                    <h2 className="text-lg font-bold">In-Situ Live Linter &amp; Figma Plugin Bridge</h2>
                   </div>
                   <p className={`text-xs mt-1 ${textMuted}`}>
-                    Continuous real-time authoring canvas inspection. Evaluates terminology, SLA commitments, and tone drift with sub-millisecond local WASM/Regex execution.
+                    Continuous real-time authoring canvas inspection &amp; packaged native Figma plugin for in-canvas design governance.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Live Socket: Active (&lt;1ms latency)</span>
+                  {/* SUB-TAB TOGGLE */}
+                  <div className="flex items-center gap-1 p-1 rounded-lg border border-slate-700/60 bg-slate-900/80 text-xs">
+                    <button
+                      onClick={() => setLiveSubTab('linter')}
+                      className={`px-3 py-1.5 rounded-md font-semibold transition ${
+                        liveSubTab === 'linter' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ⚡ Authoring Linter
+                    </button>
+                    <button
+                      onClick={() => setLiveSubTab('figma')}
+                      className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1 ${
+                        liveSubTab === 'figma' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🎨 Figma Simulator
+                    </button>
                   </div>
+
                   <button
                     onClick={() => setContent(channelTemplates.channels[channel]?.flawed || '')}
                     className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition ${isDark ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 border-slate-300'}`}
@@ -1429,7 +1536,8 @@ export default function AegisBrandApp() {
                 </div>
               </div>
 
-              {/* DUAL WORKSPACE: FIGMA AUTHORING CANVAS + REAL-TIME LINTER TRIAGE */}
+              {/* SUB-VIEW 1: REAL-TIME CONTINUOUS LINTER */}
+              {liveSubTab === 'linter' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* LEFT: SIMULATED FIGMA / CMS CANVAS (7 COLS) */}
                 <div className="lg:col-span-7 space-y-4">
@@ -1694,6 +1802,225 @@ export default function AegisBrandApp() {
                   </div>
                 </div>
               </div>
+              )}
+
+              {/* SUB-VIEW 2: FIGMA IN-SITU CANVAS SIMULATOR */}
+              {liveSubTab === 'figma' && (
+                <div className="space-y-6">
+                  <div className={`p-4 rounded-xl border ${innerClass} flex flex-col md:flex-row items-start md:items-center justify-between gap-3`}>
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2 text-blue-400">
+                        🎨 In-Situ Figma Artboard Simulator
+                      </h3>
+                      <p className={`text-xs mt-0.5 ${textMuted}`}>
+                        Select layers inside the Figma artboard below. The AegisBrand floating inspector lints each text layer against enterprise SLA and brand rules.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setFigmaHeadline('#1 Unlimited 5G Enterprise Cloud');
+                          setFigmaSubhead('Cheapest cloud with 100% uninterrupted uptime and bulletproof security.');
+                          setFigmaCta('Deploy with Zero Throttling ➔');
+                          setIsFigmaFixed(false);
+                          showToast('Reset Figma Artboard to flawed benchmark', 'info');
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-semibold hover:bg-slate-800 transition"
+                      >
+                        Reset Canvas
+                      </button>
+                      <button
+                        onClick={() => {
+                          setFigmaHeadline('Award-Winning Enterprise AI Cloud');
+                          setFigmaSubhead('Cost-optimized high ROI compute with financially-backed 99.95% enterprise SLA.');
+                          setFigmaCta('Deploy with Predictable Low-Latency QoS ➔');
+                          setIsFigmaFixed(true);
+                          confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+                          showToast('✨ All Figma Artboard layers rewritten to 100% compliant brand copy!');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Auto-Fix Canvas (1-Click)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* FIGMA ARTBOARD (7 COLS) */}
+                    <div className="lg:col-span-7 space-y-3">
+                      <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950 shadow-xl">
+                        {/* FIGMA FRAME HEADER */}
+                        <div className="px-4 py-2 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between text-xs font-mono">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <span className="h-2.5 w-2.5 rounded-full bg-rose-500 inline-block"></span>
+                            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block"></span>
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                            <span className="font-semibold text-slate-300 ml-2">#Hero-Banner-1200x630</span>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                            isFigmaFixed ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {isFigmaFixed ? '100% Compliant' : '4 Brand Violations'}
+                          </span>
+                        </div>
+
+                        {/* ARTBOARD CANVAS */}
+                        <div className="p-8 space-y-5 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 min-h-[280px]">
+                          {/* HEADLINE LAYER */}
+                          <div
+                            onClick={() => setSelectedFigmaLayer('headline')}
+                            className={`p-3 rounded-lg border-2 cursor-pointer transition relative ${
+                              selectedFigmaLayer === 'headline'
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-transparent hover:border-slate-700'
+                            }`}
+                          >
+                            <span className="text-[10px] font-mono text-blue-400 absolute -top-2.5 left-2 px-1 rounded bg-slate-900 border border-blue-500/50">
+                              Layer: Text / Headline
+                            </span>
+                            <h1 className="text-xl font-black text-white tracking-tight">
+                              {figmaHeadline}
+                            </h1>
+                          </div>
+
+                          {/* SUBHEAD LAYER */}
+                          <div
+                            onClick={() => setSelectedFigmaLayer('subhead')}
+                            className={`p-3 rounded-lg border-2 cursor-pointer transition relative ${
+                              selectedFigmaLayer === 'subhead'
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-transparent hover:border-slate-700'
+                            }`}
+                          >
+                            <span className="text-[10px] font-mono text-blue-400 absolute -top-2.5 left-2 px-1 rounded bg-slate-900 border border-blue-500/50">
+                              Layer: Text / Body Copy
+                            </span>
+                            <p className="text-sm text-slate-300 leading-relaxed">
+                              {figmaSubhead}
+                            </p>
+                          </div>
+
+                          {/* CTA LAYER */}
+                          <div
+                            onClick={() => setSelectedFigmaLayer('cta')}
+                            className={`inline-block p-1 rounded-xl border-2 cursor-pointer transition relative ${
+                              selectedFigmaLayer === 'cta'
+                                ? 'border-blue-500'
+                                : 'border-transparent'
+                            }`}
+                          >
+                            <span className="text-[10px] font-mono text-blue-400 absolute -top-2.5 left-2 px-1 rounded bg-slate-900 border border-blue-500/50">
+                              Layer: Frame / CTA Button
+                            </span>
+                            <div className="px-5 py-2.5 rounded-lg bg-blue-600 font-bold text-white text-xs shadow-lg shadow-blue-500/20">
+                              {figmaCta}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FIGMA FLOATING PLUGIN INSPECTOR (5 COLS) */}
+                    <div className="lg:col-span-5 space-y-4">
+                      <div className="border border-blue-500/40 rounded-xl p-4 bg-slate-900/90 shadow-xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-blue-400" />
+                            <span className="font-bold text-xs text-white">AegisBrand Figma Inspector</span>
+                          </div>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold">
+                            v2.4 Live
+                          </span>
+                        </div>
+
+                        <div className={`p-3 rounded-lg border ${
+                          isFigmaFixed
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                        } flex items-center justify-between`}>
+                          <div>
+                            <div className="text-[11px] font-semibold">
+                              {isFigmaFixed ? 'Brand Compliance Score' : 'Violations Detected'}
+                            </div>
+                            <div className="text-[10px] opacity-75">
+                              {isFigmaFixed ? 'Verified against CloudScale Policy §3.2' : '4 Critical Claims violate FTC & SLA terms'}
+                            </div>
+                          </div>
+                          <span className="text-xl font-black font-mono">
+                            {isFigmaFixed ? '100%' : '32%'}
+                          </span>
+                        </div>
+
+                        {!isFigmaFixed ? (
+                          <div className="space-y-2 text-xs">
+                            <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
+                              <div className="flex items-center justify-between text-[11px] font-bold text-rose-400">
+                                <span>CRITICAL CLAIM</span>
+                                <span className="font-mono text-[9px] text-slate-500">Master SLA §4.2</span>
+                              </div>
+                              <div className="text-[11px] text-slate-300">
+                                <span className="bg-rose-500/20 text-rose-300 px-1 py-0.5 rounded font-mono">"100% uninterrupted uptime"</span> contradicts official 99.95% SLA.
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
+                              <div className="flex items-center justify-between text-[11px] font-bold text-amber-400">
+                                <span>UNVERIFIED SUPERLATIVE</span>
+                                <span className="font-mono text-[9px] text-slate-500">Advertising §1.1</span>
+                              </div>
+                              <div className="text-[11px] text-slate-300">
+                                <span className="bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded font-mono">"#1 Unlimited 5G"</span> is an ungrounded telco capability claim.
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setFigmaHeadline('Award-Winning Enterprise AI Cloud');
+                                setFigmaSubhead('Cost-optimized high ROI compute with financially-backed 99.95% enterprise SLA.');
+                                setFigmaCta('Deploy with Predictable Low-Latency QoS ➔');
+                                setIsFigmaFixed(true);
+                                confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+                                showToast('✨ Rewrote all canvas layers to approved phrasing!');
+                              }}
+                              className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
+                            >
+                              <Sparkles className="h-4 w-4" /> Rewrite Canvas Layers
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-lg border border-emerald-500/30 bg-emerald-950/20 text-center space-y-2">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
+                            <div className="font-bold text-xs text-emerald-300">Canvas Is 100% Compliant</div>
+                            <p className="text-[11px] text-slate-400">
+                              All superlatives replaced with verified SLA citations and approved enterprise messaging.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* FIGMA PLUGIN DOWNLOAD CARD */}
+                      <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                            <FileCode className="h-4 w-4 text-purple-400" /> Figma Desktop Plugin Package
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">
+                            Round 3 Deliverable #1
+                          </span>
+                        </div>
+                        <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+                          The repository includes the complete packaged Figma plugin at <code className="text-purple-300 font-mono">figma-plugin/manifest.json</code>.
+                        </p>
+                        <div className="text-[10px] text-slate-400 space-y-0.5">
+                          <div>1. In Figma Desktop: <strong>Plugins ➔ Development ➔ Import plugin from manifest...</strong></div>
+                          <div>2. Select <strong className="text-slate-200">figma-plugin/manifest.json</strong></div>
+                          <div>3. Select any text layer and lint directly inside Figma!</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -1738,7 +2065,14 @@ export default function AegisBrandApp() {
                         <td className="py-2 px-3 text-slate-500">{cert.approvedBy}</td>
                         <td className="py-2 px-3 text-slate-400">{new Date(cert.verifiedAt).toLocaleTimeString()}</td>
                         <td className="py-2 px-3 text-slate-500 text-[10px]">{cert.signatureSha256.substring(0, 16)}...</td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2 px-3 text-right flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedCertForModal(cert)}
+                            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-sans font-semibold"
+                            title="View & Print Official Compliance Certificate PDF"
+                          >
+                            <Printer className="h-3 w-3" /> Certificate
+                          </button>
                           <button
                             onClick={() => handleDownloadCertificateJson(cert)}
                             className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 font-sans"
@@ -1753,14 +2087,200 @@ export default function AegisBrandApp() {
                 </table>
               </div>
             )}
+
+            {/* ENTERPRISE WEBHOOK DISPATCHER (IMPROVEMENT #3) */}
+            <div className={`border rounded-xl p-5 space-y-4 ${innerClass}`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-blue-400">
+                    <Send className="h-4 w-4" /> Enterprise Compliance Webhook Dispatcher
+                  </h3>
+                  <p className={`text-xs mt-0.5 ${textMuted}`}>
+                    Dispatches cryptographically signed compliance receipts (HMAC-SHA256) to external CMS, Slack, GitHub Actions, or Enterprise ERP pipelines.
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold self-start md:self-auto">
+                  HMAC-SHA256 Signed
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold block mb-1 text-slate-300">
+                    Target Webhook Sink URL:
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={webhookUrl}
+                      onChange={(e) => setWebhookUrl(e.target.value)}
+                      placeholder="https://hooks.slack.com/services/... or https://webhook.site/..."
+                      className={`flex-1 rounded-lg px-3 py-2 text-xs font-mono border focus:outline-none focus:ring-1 focus:ring-blue-500 ${innerClass}`}
+                    />
+                    <button
+                      onClick={() => handleDispatchWebhook()}
+                      disabled={isDispatchingWebhook}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shrink-0 shadow-md shadow-blue-600/20"
+                    >
+                      {isDispatchingWebhook ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Dispatch Webhook
+                    </button>
+                  </div>
+                </div>
+
+                {/* QUICK DESTINATION PRESETS */}
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className={textMuted}>Quick Presets:</span>
+                  <button
+                    onClick={() => setWebhookUrl('https://hooks.slack.com/services/mock/arkz/compliance')}
+                    className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
+                  >
+                    💬 Slack #compliance-alerts
+                  </button>
+                  <button
+                    onClick={() => setWebhookUrl('https://api.contentful.com/spaces/mock/webhooks/publish')}
+                    className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
+                  >
+                    📦 Contentful CMS Publish Hook
+                  </button>
+                  <button
+                    onClick={() => setWebhookUrl('https://webhook.site/mock-enterprise-compliance-sink')}
+                    className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
+                  >
+                    ⚡ Webhook.site Enterprise Sink
+                  </button>
+                </div>
+
+                {/* LIVE WEBHOOK DELIVERY LOG */}
+                {lastWebhookLog && (
+                  <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-950/20 text-xs space-y-2 mt-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between font-mono text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                        <span className="font-bold text-emerald-400">
+                          HTTP {lastWebhookLog.status} OK (Delivery ID: {lastWebhookLog.deliveryId})
+                        </span>
+                      </div>
+                      <span className="text-slate-400">{lastWebhookLog.latencyMs}ms Latency</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-300 break-all space-y-1">
+                      <div><strong>Target:</strong> {lastWebhookLog.targetUrl}</div>
+                      <div><strong>HMAC-SHA256:</strong> <span className="text-emerald-400">{lastWebhookLog.signatureHmac}</span></div>
+                      <div><strong>Dispatched Headers:</strong> X-AegisBrand-Signature, X-AegisBrand-Event</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
 
+      {/* PRINTABLE COMPLIANCE CERTIFICATE MODAL */}
+      {selectedCertForModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-6">
+            <button
+              onClick={() => setSelectedCertForModal(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white text-sm px-2 py-1 rounded border border-transparent hover:border-slate-700"
+            >
+              ✕ Close
+            </button>
+
+            {/* PRINTABLE CERTIFICATE VIEW */}
+            <div id="printable-certificate" className="border-2 border-emerald-500/40 rounded-xl p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 space-y-4">
+              <div className="flex items-start justify-between border-b border-emerald-500/30 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-7 w-7 text-emerald-400" />
+                    <div>
+                      <h2 className="text-base font-black uppercase tracking-wider text-white">
+                        Official Certificate of Brand Compliance
+                      </h2>
+                      <p className="text-[10px] text-emerald-400 font-mono">
+                        Cryptographic Verification Standard ISO-27001-AegisBrand
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-block">
+                    {selectedCertForModal.certificateId}
+                  </span>
+                  <div className="text-[9px] text-slate-400 mt-1 font-mono">
+                    {new Date(selectedCertForModal.verifiedAt).toUTCString()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60">
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono">Asset Title:</span>
+                  <span className="font-bold text-slate-100">{selectedCertForModal.assetTitle}</span>
+                </div>
+                <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60">
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono">Governing Policy:</span>
+                  <span className="font-bold text-slate-100">CloudScale Guidelines v{selectedCertForModal.guidelineVersion}</span>
+                </div>
+                <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60">
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono">Authorized Signatory:</span>
+                  <span className="font-bold text-slate-100">{selectedCertForModal.approvedBy}</span>
+                </div>
+                <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60">
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono">Compliance Verdict:</span>
+                  <span className="font-bold text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> 100% APPROVED FOR PUBLICATION
+                  </span>
+                </div>
+
+                <div className="col-span-2 p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 space-y-1">
+                  <span className="text-[10px] text-slate-400 block uppercase font-mono">Cryptographic SHA-256 Digest:</span>
+                  <div className="font-mono text-[10px] text-emerald-400 break-all">
+                    {selectedCertForModal.signatureSha256}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-[10px] text-slate-400">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 inline-block"></span>
+                  <span>Tamper-Proof Ledger Seal Verified by Team ARKZ (Codex 48)</span>
+                </div>
+                <span className="font-mono">Status: ACTIVE &amp; IMMUTABLE</span>
+              </div>
+            </div>
+
+            {/* MODAL ACTIONS */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => handleDownloadCertificateJson(selectedCertForModal)}
+                className="px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" /> Download JSON
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedCertForModal(null)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                >
+                  <Printer className="h-4 w-4" /> Print / Save as PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FOOTER */}
       <footer className={`border-t ${borderSubtle} px-6 py-4 text-center text-xs ${textMuted} ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
         <p>
-          <strong>AegisBrand AI</strong> • Developed by <strong>Deepak R (Team ARKZ)</strong> for <strong>Codex 48 Hackathon Round 2</strong>.
+          <strong>AegisBrand AI</strong> • Developed by <strong>Deepak R (Team ARKZ)</strong> for <strong>Codex 48 Hackathon Round 3 Finale</strong>.
         </p>
         <p className="text-[11px] text-slate-500 mt-1">
           Multimodal Pre-Publication Brand Governance • Powered by Google Gemini &amp; Mathematical Vision

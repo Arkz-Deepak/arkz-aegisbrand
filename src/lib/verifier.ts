@@ -278,6 +278,8 @@ export function runDeterministicVerification(
 
   // 3. Dynamic Superlatives & Over-promising
   const unverifiedSuperlatives = [
+    { word: '100% uninterrupted uptime', reason: 'Contradicts official enterprise SLA of 99.95% availability.' },
+    { word: '100% uptime', reason: 'Contradicts official enterprise SLA of 99.95% availability.' },
     { word: '#1', reason: 'Unsubstantiated market claim without third-party auditor citation.' },
     { word: 'undisputed champion', reason: 'Aggressive marketing claim lacking factual verification.' },
     { word: 'never goes down', reason: 'Absolutist SLA assertion violating contract boundaries.' },
@@ -405,4 +407,37 @@ function getRelativeLuminance(hex: string): number {
 
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function replaceExcerptInText(source: string, excerpt: string, replacement: string): string {
+  if (!source || !excerpt) return source;
+  if (source.includes(excerpt)) return source.replace(excerpt, replacement);
+
+  const trimmed = excerpt.trim();
+  if (source.includes(trimmed)) return source.replace(trimmed, replacement);
+
+  const lowerSource = source.toLowerCase();
+  const lowerExcerpt = trimmed.toLowerCase();
+  const idx = lowerSource.indexOf(lowerExcerpt);
+  if (idx !== -1) {
+    return source.substring(0, idx) + replacement + source.substring(idx + lowerExcerpt.length);
+  }
+
+  const stripped = trimmed.replace(/^["'`\s]+|["'`\s.,!?:;]+$/g, '');
+  if (stripped.length > 2) {
+    const sIdx = lowerSource.indexOf(stripped.toLowerCase());
+    if (sIdx !== -1) {
+      return source.substring(0, sIdx) + replacement + source.substring(sIdx + stripped.length);
+    }
+  }
+
+  const words = trimmed.split(/\s+/).slice(0, 3).join(' ').toLowerCase();
+  if (words.length > 5) {
+    const wIdx = lowerSource.indexOf(words);
+    if (wIdx !== -1) {
+      return source.substring(0, wIdx) + replacement + source.substring(wIdx + trimmed.length);
+    }
+  }
+
+  return source;
 }
